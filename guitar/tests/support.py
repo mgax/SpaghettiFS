@@ -3,7 +3,7 @@ import tempfile
 import shutil
 from os import path
 
-from guitar.persistence import Repo
+from guitar.storage import Repo
 
 test_git_path = path.join(path.dirname(__file__), 'test.git')
 

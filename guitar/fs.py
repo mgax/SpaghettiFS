@@ -2,7 +2,7 @@ from errno import ENOENT
 from stat import S_IFDIR, S_IFREG
 from time import time
 from fuse import FUSE, Operations, LoggingMixIn
-from persistence import Repo
+from storage import Repo
 
 class GuitarFs(LoggingMixIn, Operations):
     def __init__(self, repo):
