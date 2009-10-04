@@ -31,7 +31,7 @@ class FuseMountTestCase(GuitarTestCase):
 
     def test_listing(self):
         ls = os.listdir(self.mount_point)
-        self.assertEqual(ls, ['a.txt'])
+        self.assertEqual(set(ls), set(['a.txt', 'b']))
 
     def test_read_file(self):
         data = open(path.join(self.mount_point, 'a.txt')).read()
