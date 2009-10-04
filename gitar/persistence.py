@@ -1,41 +1,45 @@
+import UserDict
 import dulwich
 
 class Repo(object):
     def __init__(self, repo_path):
         self.git = dulwich.repo.Repo(repo_path)
 
-    @property
-    def _current_tree(self):
-        head = self.git.head()
-        commit = self.git.commit(head)
-        tree = self.git.tree(commit.tree)
-        return tree
+    def get_root(self):
+        git_id = self.git.commit(self.git.head()).tree
+        commit_tree = RepoDir(self.git, git_id, None)
+        root_tree = commit_tree['data']
+        root_tree.name = '[root]'
+        return root_tree
 
-    def _get_dir(self, dir_path):
-        dir_tree = self._current_tree
-        for dir_name in dir_path.split('/'):
-            dir_entry = dict((i[0], i[2]) for i in dir_tree.iteritems())[dir_name]
-            dir_tree = self.git.tree(dir_entry)
+class RepoDir(UserDict.DictMixin):
+    def __init__(self, git, git_id, name):
+        self.git = git
+        self.git_id = git_id
+        self.name = name
+        #self.items = [item[0] for item in self.tree.iteritems()]
 
-        return dir_tree
+    def itertree(self):
+        return self.git.tree(self.git_id).iteritems()
 
-    def get_file(self, file_path):
-        assert file_path.startswith('/')
-        dir_path, sep, file_name = ('data'+file_path).rpartition('/')
+    def __getitem__(self, key):
+        for name, mode, git_id in self.itertree():
+            if name == key:
+                if mode == 16384: # directory
+                    return RepoDir(self.git, git_id, name)
+                else: # regular file
+                    return RepoFile(self.git, git_id, name)
+        raise KeyError(key)
 
-        dir_tree = self._get_dir(dir_path)
-        file_entry = dict((i[0], i[2]) for i in dir_tree.iteritems())[file_name]
-        file_blob = self.git.get_blob(file_entry)
-        file_data = file_blob.data
+    def keys(self):
+        return [name for (name, mode, git_id) in self.itertree()]
 
-        return RepoFile(file_name, file_data)
-
-    def list_files(self, dir_path):
-        assert dir_path.startswith('/'), dir_path.endswith('/')
-        dir_tree = self._get_dir('data' + dir_path[:-1])
-        return [entry[1] for entry in dir_tree.entries()]
 
 class RepoFile(object):
-    def __init__(self, name, data):
+    def __init__(self, git, git_id, name):
+        self.git = git
+        self.git_id = git_id
         self.name = name
-        self.data = data
+        self.blob = self.git.get_blob(git_id)
+        self.data = self.blob.data
+        self.size = len(self.blob.data)

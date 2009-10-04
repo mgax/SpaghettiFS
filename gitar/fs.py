@@ -27,7 +27,7 @@ class GitarFs(LoggingMixIn, Operations):
         return ''
 
     def readdir(self, path, fh):
-        names = self.repo.list_files(path)
+        names = self.repo.get_root().keys()
         print names
         return ['.', '..'] + names
 
