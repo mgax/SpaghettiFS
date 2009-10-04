@@ -27,13 +27,15 @@ class FuseMountTestCase(GitarTestCase):
                               ).communicate()[0]
         msg = self.fsmount.communicate()[0]
         #print msg
-
-        print self.tmpdir
         super(FuseMountTestCase, self).tearDown()
 
     def test_listing(self):
         ls = os.listdir(self.mount_point)
         self.assertEqual(ls, ['a.txt'])
+
+    def test_read_file(self):
+        data = open(path.join(self.mount_point, 'a.txt')).read()
+        self.assertEqual(data, 'text file "a"\n')
 
 if __name__ == '__main__':
     unittest.main()

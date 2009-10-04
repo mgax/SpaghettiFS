@@ -13,6 +13,8 @@ class Repo(object):
         return root_tree
 
 class RepoDir(UserDict.DictMixin):
+    is_dir = True
+
     def __init__(self, git, git_id, name):
         self.git = git
         self.git_id = git_id
@@ -36,6 +38,8 @@ class RepoDir(UserDict.DictMixin):
 
 
 class RepoFile(object):
+    is_dir = False
+
     def __init__(self, git, git_id, name):
         self.git = git
         self.git_id = git_id
