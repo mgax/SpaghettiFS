@@ -1,8 +1,8 @@
 import unittest
-from support import GitarTestCase
+from support import GuitarTestCase
 
 
-class ReadGitTestCase(GitarTestCase):
+class ReadGitTestCase(GuitarTestCase):
     def test_walk(self):
         root = self.repo.get_root()
         self.assertEqual(root.is_dir, True)

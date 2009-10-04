@@ -4,15 +4,15 @@ from os import path
 import sys
 import subprocess
 import time
-from support import GitarTestCase
+from support import GuitarTestCase
 
 
-class FuseMountTestCase(GitarTestCase):
+class FuseMountTestCase(GuitarTestCase):
     def setUp(self):
         super(FuseMountTestCase, self).setUp()
         self.mount_point = path.join(self.tmpdir, 'mnt')
         os.mkdir(self.mount_point)
-        script = ("from gitar.fs import mount; "
+        script = ("from guitar.fs import mount; "
                   "mount(%s, %s)" % (repr(self.repo_path),
                                      repr(self.mount_point)))
         self.fsmount = subprocess.Popen([sys.executable, '-c', script],

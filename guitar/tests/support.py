@@ -3,11 +3,11 @@ import tempfile
 import shutil
 from os import path
 
-from gitar.persistence import Repo
+from guitar.persistence import Repo
 
 test_git_path = path.join(path.dirname(__file__), 'test.git')
 
-class GitarTestCase(unittest.TestCase):
+class GuitarTestCase(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.repo_path = path.join(self.tmpdir, path.basename(test_git_path))

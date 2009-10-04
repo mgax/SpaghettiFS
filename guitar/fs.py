@@ -4,7 +4,7 @@ from time import time
 from fuse import FUSE, Operations, LoggingMixIn
 from persistence import Repo
 
-class GitarFs(LoggingMixIn, Operations):
+class GuitarFs(LoggingMixIn, Operations):
     def __init__(self, repo):
         self.repo = repo
 
@@ -59,5 +59,5 @@ class GitarFs(LoggingMixIn, Operations):
     statfs = None
 
 def mount(repo_path, mount_path):
-    fs = GitarFs(Repo(repo_path))
+    fs = GuitarFs(Repo(repo_path))
     return FUSE(fs, mount_path, foreground=True)
