@@ -45,5 +45,36 @@ class BackendTestCase(GuitarTestCase):
         self.assertEqual(g_txt_2.data, '')
         self.assertEqual(g_txt_2.name, 'g.txt')
 
+    def test_write_file_data(self):
+        from guitar.storage import Repo
+        def assert_git_contents(data):
+            repo2 = Repo(self.repo_path)
+            h_txt_2 = repo2.get_root()['b']['h.txt']
+            self.assertEqual(h_txt_2.size, len(data))
+            self.assertEqual(h_txt_2.data, data)
+
+        b = self.repo.get_root()['b']
+        h_txt = b.create_file('h.txt')
+        h_txt.write_data('hello git!', 0)
+        self.assertEqual(h_txt.size, 10)
+        self.assertEqual(h_txt.data, 'hello git!')
+        assert_git_contents('hello git!')
+
+        h_txt.write_data(':)', 13)
+        self.assertEqual(h_txt.size, 15)
+        self.assertEqual(h_txt.data, 'hello git!\0\0\0:)')
+        assert_git_contents('hello git!\0\0\0:)')
+
+        h_txt.truncate(5)
+        self.assertEqual(h_txt.size, 5)
+        self.assertEqual(h_txt.data, 'hello')
+        assert_git_contents('hello')
+
+        h_txt.write_data('-there', 5)
+        self.assertEqual(h_txt.size, 11)
+        self.assertEqual(h_txt.data, 'hello-there')
+        assert_git_contents('hello-there')
+
+
 if __name__ == '__main__':
     unittest.main()

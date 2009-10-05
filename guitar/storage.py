@@ -88,3 +88,42 @@ class RepoFile(object):
     @property
     def path(self):
         return self.parent.path + self.name
+
+    def _update_data(self, new_data, msg):
+        self.data = new_data
+        self.size = len(self.data)
+        self.blob = dulwich.objects.Blob.from_string(self.data)
+        self.git.object_store.add_object(self.blob)
+        self.git_id = self.blob.id
+        self.parent.update(0100644, self.name, self.git_id, msg)
+
+    def write_data(self, data, offset):
+        current_data = self.data
+        end = offset + len(data)
+
+        if len(current_data) <= offset:
+            new_data = (current_data +
+                        '\0' * (offset - len(current_data)) +
+                        data)
+
+        elif len(current_data) >= (end):
+            new_data = (current_data[:offset] +
+                        data +
+                        current_data[end:])
+
+        else:
+            new_data = (current_data[:offset] +
+                        data)
+
+        msg = ("updating file %s " % self.path +
+               "(offset %d, size %d)" % (offset, len(data)))
+        self._update_data(new_data, msg)
+
+    def truncate(self, size):
+        msg = "truncating file %s (new size %d)" % (self.path, size)
+        if len(self.data) > size:
+            self._update_data(self.data[:size], msg)
+        elif len(self.data) < size:
+            self._update_data(self.data + '\0' * (size - len(data)), msg)
+        else:
+            pass
