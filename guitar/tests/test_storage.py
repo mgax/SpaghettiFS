@@ -1,5 +1,6 @@
 import unittest
 from support import GuitarTestCase
+from guitar.storage import Repo
 
 
 class BackendTestCase(GuitarTestCase):
@@ -37,7 +38,6 @@ class BackendTestCase(GuitarTestCase):
         self.assertEqual(g_txt.data, '')
         self.assertEqual(g_txt.name, 'g.txt')
 
-        from guitar.storage import Repo
         repo2 = Repo(self.repo_path)
         g_txt_2 = repo2.get_root()['b']['g.txt']
         self.assertFalse(g_txt_2.is_dir)
@@ -46,7 +46,6 @@ class BackendTestCase(GuitarTestCase):
         self.assertEqual(g_txt_2.name, 'g.txt')
 
     def test_write_file_data(self):
-        from guitar.storage import Repo
         def assert_git_contents(data):
             repo2 = Repo(self.repo_path)
             h_txt_2 = repo2.get_root()['b']['h.txt']
@@ -74,6 +73,18 @@ class BackendTestCase(GuitarTestCase):
         self.assertEqual(h_txt.size, 11)
         self.assertEqual(h_txt.data, 'hello-there')
         assert_git_contents('hello-there')
+
+    def test_remove_file(self):
+        c = self.repo.get_root()['b']['c']
+        self.assertEqual(set(c.keys()), set(['d.txt', 'e.txt']))
+
+        d_txt = c['d.txt']
+        d_txt.unlink()
+        self.assertEqual(set(c.keys()), set(['e.txt']))
+
+        repo2 = Repo(self.repo_path)
+        c_2 = repo2.get_root()['b']['c']
+        self.assertEqual(set(c_2.keys()), set(['e.txt']))
 
 
 if __name__ == '__main__':

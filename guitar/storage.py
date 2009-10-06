@@ -60,7 +60,10 @@ class RepoDir(UserDict.DictMixin):
 
     def update(self, mode, name, git_id, msg):
         tree = self.git.tree(self.git_id)
-        tree.add(mode, name, git_id)
+        if git_id is None:
+            del tree[name]
+        else:
+            tree.add(mode, name, git_id)
         self.git.object_store.add_object(tree)
         self.git_id = tree.id
         self.parent.update(040000, self.name, self.git_id, msg)
@@ -127,3 +130,7 @@ class RepoFile(object):
             self._update_data(self.data + '\0' * (size - len(data)), msg)
         else:
             pass
+
+    def unlink(self):
+        msg = "removing file %s" % self.path
+        self.parent.update(0, self.name, None, msg)
