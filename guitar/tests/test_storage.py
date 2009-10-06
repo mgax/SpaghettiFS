@@ -86,6 +86,34 @@ class BackendTestCase(GuitarTestCase):
         c_2 = repo2.get_root()['b']['c']
         self.assertEqual(set(c_2.keys()), set(['e.txt']))
 
+    def test_make_directory(self):
+        c = self.repo.get_root()['b']['c']
+        x = c.create_directory('x')
+        self.assertEqual(set(c.keys()), set(['d.txt', 'e.txt', 'x']))
+
+        repo2 = Repo(self.repo_path)
+        c_2 = repo2.get_root()['b']['c']
+        self.assertEqual(set(c_2.keys()), set(['d.txt', 'e.txt', 'x']))
+
+        y = x.create_file('y')
+        y.write_data('ydata', 0)
+        self.assertEqual(set(x.keys()), set(['y']))
+        self.assertEqual(y.data, 'ydata')
+
+        repo3 = Repo(self.repo_path)
+        c_3 = repo3.get_root()['b']['c']
+        self.assertEqual(set(c_3.keys()), set(['d.txt', 'e.txt', 'x']))
+        x_3 = c_3['x']
+        self.assertEqual(set(x_3.keys()), set(['y']))
+        y_3 = x_3['y']
+        self.assertEqual(y_3.data, 'ydata')
+
+        x.unlink()
+
+        repo4 = Repo(self.repo_path)
+        c_4 = repo4.get_root()['b']['c']
+        self.assertEqual(set(c_4.keys()), set(['d.txt', 'e.txt']))
+
 
 if __name__ == '__main__':
     unittest.main()

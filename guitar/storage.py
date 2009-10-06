@@ -69,12 +69,24 @@ class RepoDir(UserDict.DictMixin):
         self.parent.update(040000, self.name, self.git_id, msg)
 
     def create_file(self, name):
-        # TODO: check filename
+        # TODO: check name
         blob = dulwich.objects.Blob.from_string('')
         self.git.object_store.add_object(blob)
         msg = "creating file %s" % (self.path + name)
         self.update(0100644, name, blob.id, msg)
         return self[name]
+
+    def create_directory(self, name):
+        # TODO: check name
+        tree = dulwich.objects.Tree()
+        self.git.object_store.add_object(tree)
+        msg = "creating directory %s" % (self.path + name)
+        self.update(040000, name, tree.id, msg)
+        return self[name]
+
+    def unlink(self):
+        msg = "removing directory %s" % self.path
+        self.parent.update(0, self.name, None, msg)
 
 class RepoFile(object):
     is_dir = False
