@@ -41,6 +41,11 @@ class GuitarFs(LoggingMixIn, Operations):
         parent.create_file(file_name)
         return 0
 
+    def mkdir(self, path, mode):
+        parent_path, dir_name = os.path.split(path)
+        parent = self.get_obj(parent_path)
+        parent.create_directory(dir_name)
+
     def read(self, path, size, offset, fh):
         obj = self.get_obj(path)
         if obj is None or obj.is_dir:
@@ -49,8 +54,15 @@ class GuitarFs(LoggingMixIn, Operations):
             return obj.data
 
     def readdir(self, path, fh):
-        names = self.repo.get_root().keys()
-        return ['.', '..'] + names
+        obj = self.get_obj(path)
+        return ['.', '..'] + obj.keys()
+
+    def rmdir(self, path):
+        obj = self.get_obj(path)
+        if obj is None or not obj.is_dir:
+            return
+
+        obj.unlink()
 
     def truncate(self, path, length, fh=None):
         obj = self.get_obj(path)

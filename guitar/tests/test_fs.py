@@ -74,5 +74,16 @@ class FuseMountTestCase(GuitarTestCase):
         os.unlink(new_file_path)
         self.assertFalse('newfile' in os.listdir(self.mount_point))
 
+    def test_mkdir_listdir_rmdir(self):
+        new_dir_path = path.join(self.mount_point, 'newdir')
+        self.assertFalse('newdir' in os.listdir(self.mount_point))
+
+        os.mkdir(new_dir_path)
+        self.assertTrue('newdir' in os.listdir(self.mount_point))
+        self.assertEqual(os.listdir(new_dir_path), [])
+
+        os.rmdir(new_dir_path)
+        self.assertFalse('newdir' in os.listdir(self.mount_point))
+
 if __name__ == '__main__':
     unittest.main()
