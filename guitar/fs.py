@@ -59,6 +59,13 @@ class GuitarFs(LoggingMixIn, Operations):
 
         obj.truncate(length)
 
+    def unlink(self, path):
+        obj = self.get_obj(path)
+        if obj is None or obj.is_dir:
+            return
+
+        obj.unlink()
+
     def write(self, path, data, offset, fh):
         obj = self.get_obj(path)
         if obj is None or obj.is_dir:

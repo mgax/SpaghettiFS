@@ -65,5 +65,14 @@ class FuseMountTestCase(GuitarTestCase):
 
         f.close()
 
+    def test_unlink(self):
+        new_file_path = path.join(self.mount_point, 'newfile')
+        f = open(new_file_path, 'wb')
+        f.write('hey')
+        f.close()
+        self.assertTrue('newfile' in os.listdir(self.mount_point))
+        os.unlink(new_file_path)
+        self.assertFalse('newfile' in os.listdir(self.mount_point))
+
 if __name__ == '__main__':
     unittest.main()
