@@ -1,3 +1,4 @@
+import os
 from errno import ENOENT
 from stat import S_IFDIR, S_IFREG
 from time import time
@@ -34,21 +35,40 @@ class GuitarFs(LoggingMixIn, Operations):
         st['st_ctime'] = st['st_mtime'] = st['st_atime'] = time()
         return st
 
+    def create(self, path, mode):
+        parent_path, file_name = os.path.split(path)
+        parent = self.get_obj(parent_path)
+        parent.create_file(file_name)
+        return 0
+
     def read(self, path, size, offset, fh):
         obj = self.get_obj(path)
-        if obj is None:
-            return ''
-        elif obj.is_dir:
+        if obj is None or obj.is_dir:
             return ''
         else:
             return obj.data
 
     def readdir(self, path, fh):
         names = self.repo.get_root().keys()
-        print names
         return ['.', '..'] + names
 
-    access = None
+    def truncate(self, path, length, fh=None):
+        obj = self.get_obj(path)
+        if obj is None or obj.is_dir:
+            return
+
+        obj.truncate(length)
+
+    def write(self, path, data, offset, fh):
+        obj = self.get_obj(path)
+        if obj is None or obj.is_dir:
+            return 0
+
+        obj.write_data(data, offset)
+
+        return len(data)
+
+#    access = None
     flush = None
     getxattr = None
     listxattr = None

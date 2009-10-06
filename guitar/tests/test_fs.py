@@ -37,5 +37,33 @@ class FuseMountTestCase(GuitarTestCase):
         data = open(path.join(self.mount_point, 'a.txt')).read()
         self.assertEqual(data, 'text file "a"\n')
 
+    def test_write_file(self):
+        new_file_path = path.join(self.mount_point, 'newfile')
+        self.assertFalse('newfile' in os.listdir(self.mount_point))
+
+        f = open(new_file_path, 'wb')
+        self.assertTrue('newfile' in os.listdir(self.mount_point))
+        self.assertEqual(open(new_file_path).read(), '')
+
+        f.write('something here!')
+        f.flush()
+        self.assertEqual(open(new_file_path).read(), 'something here!')
+
+        f.seek(10)
+        f.write('there!')
+        f.flush()
+        self.assertEqual(open(new_file_path).read(), 'something there!')
+
+        f.truncate(9)
+        f.flush()
+        self.assertEqual(open(new_file_path).read(), 'something')
+
+        f.seek(15)
+        f.write('else')
+        f.flush()
+        self.assertEqual(open(new_file_path).read(), 'something\0\0\0\0\0\0else')
+
+        f.close()
+
 if __name__ == '__main__':
     unittest.main()
