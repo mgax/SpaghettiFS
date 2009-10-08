@@ -2,7 +2,7 @@ from time import time
 import UserDict
 import dulwich
 
-class Repo(object):
+class GitStorage(object):
     def __init__(self, repo_path):
         self.git = dulwich.repo.Repo(repo_path)
         self.tree_git_id = self.git.commit(self.git.head()).tree
@@ -10,7 +10,7 @@ class Repo(object):
     def get_root(self):
         commit_tree = self.git.tree(self.tree_git_id)
         root_id = dict((i[0], i[2]) for i in commit_tree.iteritems())['data']
-        root_tree = RepoDir(self.git, root_id, '[root]', self)
+        root_tree = StorageDir(self.git, root_id, '[root]', self)
         root_tree.path = '/'
         return root_tree
 
@@ -30,7 +30,7 @@ class Repo(object):
         self.git.object_store.add_object(commit)
         self.git.refs['refs/heads/master'] = commit.id
 
-class RepoDir(UserDict.DictMixin):
+class StorageDir(UserDict.DictMixin):
     is_dir = True
 
     def __init__(self, git, git_id, name, parent):
@@ -50,9 +50,9 @@ class RepoDir(UserDict.DictMixin):
         for name, mode, git_id in self.itertree():
             if name == key:
                 if mode == 040000: # directory
-                    return RepoDir(self.git, git_id, name, self)
+                    return StorageDir(self.git, git_id, name, self)
                 else: # regular file
-                    return RepoFile(self.git, git_id, name, self)
+                    return StorageFile(self.git, git_id, name, self)
         raise KeyError(key)
 
     def keys(self):
@@ -88,7 +88,7 @@ class RepoDir(UserDict.DictMixin):
         msg = "removing directory %s" % self.path
         self.parent.update(0, self.name, None, msg)
 
-class RepoFile(object):
+class StorageFile(object):
     is_dir = False
 
     def __init__(self, git, git_id, name, parent):

@@ -12,7 +12,7 @@ class FuseMountTestCase(SpaghettiTestCase):
         super(FuseMountTestCase, self).setUp()
         self.mount_point = path.join(self.tmpdir, 'mnt')
         os.mkdir(self.mount_point)
-        script = ("from spaghettifs.fs import mount; "
+        script = ("from spaghettifs.filesystem import mount; "
                   "mount(%s, %s)" % (repr(self.repo_path),
                                      repr(self.mount_point)))
         self.fsmount = subprocess.Popen([sys.executable, '-c', script],

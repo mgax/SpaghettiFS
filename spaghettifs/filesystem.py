@@ -3,7 +3,7 @@ from errno import ENOENT
 from stat import S_IFDIR, S_IFREG
 from time import time
 from fuse import FUSE, Operations, LoggingMixIn
-from storage import Repo
+from storage import GitStorage
 
 class SpaghettiFs(LoggingMixIn, Operations):
     def __init__(self, repo):
@@ -98,5 +98,5 @@ class SpaghettiFs(LoggingMixIn, Operations):
     statfs = None
 
 def mount(repo_path, mount_path):
-    fs = SpaghettiFs(Repo(repo_path))
+    fs = SpaghettiFs(GitStorage(repo_path))
     return FUSE(fs, mount_path, foreground=True)

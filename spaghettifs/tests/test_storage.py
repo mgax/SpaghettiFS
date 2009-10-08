@@ -1,6 +1,6 @@
 import unittest
 from support import SpaghettiTestCase
-from spaghettifs.storage import Repo
+from spaghettifs.storage import GitStorage
 
 
 class BackendTestCase(SpaghettiTestCase):
@@ -38,7 +38,7 @@ class BackendTestCase(SpaghettiTestCase):
         self.assertEqual(g_txt.data, '')
         self.assertEqual(g_txt.name, 'g.txt')
 
-        repo2 = Repo(self.repo_path)
+        repo2 = GitStorage(self.repo_path)
         g_txt_2 = repo2.get_root()['b']['g.txt']
         self.assertFalse(g_txt_2.is_dir)
         self.assertEqual(g_txt_2.size, 0)
@@ -47,7 +47,7 @@ class BackendTestCase(SpaghettiTestCase):
 
     def test_write_file_data(self):
         def assert_git_contents(data):
-            repo2 = Repo(self.repo_path)
+            repo2 = GitStorage(self.repo_path)
             h_txt_2 = repo2.get_root()['b']['h.txt']
             self.assertEqual(h_txt_2.size, len(data))
             self.assertEqual(h_txt_2.data, data)
@@ -82,7 +82,7 @@ class BackendTestCase(SpaghettiTestCase):
         d_txt.unlink()
         self.assertEqual(set(c.keys()), set(['e.txt']))
 
-        repo2 = Repo(self.repo_path)
+        repo2 = GitStorage(self.repo_path)
         c_2 = repo2.get_root()['b']['c']
         self.assertEqual(set(c_2.keys()), set(['e.txt']))
 
@@ -91,7 +91,7 @@ class BackendTestCase(SpaghettiTestCase):
         x = c.create_directory('x')
         self.assertEqual(set(c.keys()), set(['d.txt', 'e.txt', 'x']))
 
-        repo2 = Repo(self.repo_path)
+        repo2 = GitStorage(self.repo_path)
         c_2 = repo2.get_root()['b']['c']
         self.assertEqual(set(c_2.keys()), set(['d.txt', 'e.txt', 'x']))
 
@@ -100,7 +100,7 @@ class BackendTestCase(SpaghettiTestCase):
         self.assertEqual(set(x.keys()), set(['y']))
         self.assertEqual(y.data, 'ydata')
 
-        repo3 = Repo(self.repo_path)
+        repo3 = GitStorage(self.repo_path)
         c_3 = repo3.get_root()['b']['c']
         self.assertEqual(set(c_3.keys()), set(['d.txt', 'e.txt', 'x']))
         x_3 = c_3['x']
@@ -110,7 +110,7 @@ class BackendTestCase(SpaghettiTestCase):
 
         x.unlink()
 
-        repo4 = Repo(self.repo_path)
+        repo4 = GitStorage(self.repo_path)
         c_4 = repo4.get_root()['b']['c']
         self.assertEqual(set(c_4.keys()), set(['d.txt', 'e.txt']))
 
