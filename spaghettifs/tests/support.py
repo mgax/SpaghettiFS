@@ -3,11 +3,11 @@ import tempfile
 import shutil
 from os import path
 
-from guitar.storage import Repo
+from spaghettifs.storage import Repo
 
 test_git_path = path.join(path.dirname(__file__), 'test.git')
 
-class GuitarTestCase(unittest.TestCase):
+class SpaghettiTestCase(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.repo_path = path.join(self.tmpdir, path.basename(test_git_path))

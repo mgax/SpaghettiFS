@@ -1,9 +1,9 @@
 import unittest
-from support import GuitarTestCase
-from guitar.storage import Repo
+from support import SpaghettiTestCase
+from spaghettifs.storage import Repo
 
 
-class BackendTestCase(GuitarTestCase):
+class BackendTestCase(SpaghettiTestCase):
     def test_walk(self):
         root = self.repo.get_root()
         self.assertTrue(root.is_dir)

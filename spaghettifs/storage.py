@@ -22,7 +22,7 @@ class Repo(object):
 
         commit = dulwich.objects.Commit()
         commit.tree = self.tree_git_id
-        commit.author = commit.committer = "Guitar User <noreply@grep.ro>"
+        commit.author = commit.committer = "Spaghetti User <noreply@grep.ro>"
         commit.commit_time = commit.author_time = int(time())
         commit.commit_timezone = commit.author_timezone = 2*60*60
         commit.encoding = "UTF-8"

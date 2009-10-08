@@ -5,7 +5,7 @@ from time import time
 from fuse import FUSE, Operations, LoggingMixIn
 from storage import Repo
 
-class GuitarFs(LoggingMixIn, Operations):
+class SpaghettiFs(LoggingMixIn, Operations):
     def __init__(self, repo):
         self.repo = repo
 
@@ -98,5 +98,5 @@ class GuitarFs(LoggingMixIn, Operations):
     statfs = None
 
 def mount(repo_path, mount_path):
-    fs = GuitarFs(Repo(repo_path))
+    fs = SpaghettiFs(Repo(repo_path))
     return FUSE(fs, mount_path, foreground=True)
