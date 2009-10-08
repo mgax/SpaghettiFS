@@ -166,7 +166,7 @@ class GitStorage(object):
         commit_tree = self.git.tree(self.commit_tree_id)
         root_ls_id = commit_tree['root.ls'][1]
         root_sub_id = commit_tree['root.sub'][1]
-        root = StorageDir('[ROOT]', root_ls_id, root_sub_id, self, self)
+        root = StorageDir('root', root_ls_id, root_sub_id, self, self)
         root.path = '/'
         return root
 
@@ -175,6 +175,45 @@ class GitStorage(object):
         inode_tree = self.git.tree(commit_tree['inodes'][1])
         inode_id = inode_tree[name][1]
         return StorageInode(name, inode_id, self)
+
+    def create_inode(self):
+        inodes_id = self.git.tree(self.commit_tree_id)['inodes'][1]
+        inodes = self.git.tree(inodes_id)
+        last_inode_name = max(i[0] for i in inodes.iteritems())
+        inode_name = 'i' + str(int(last_inode_name[1:]) + 1)
+
+        inode_contents = dulwich.objects.Tree()
+        self.git.object_store.add_object(inode_contents)
+
+        inodes[inode_name] = (040000, inode_contents.id)
+        self.git.object_store.add_object(inodes)
+
+        self.update_sub('inodes', (040000, inodes.id))
+
+        return self.get_inode(inode_name)
+
+    def update_sub(self, name, value):
+        assert ((name == 'root.ls' and value[0] == 0100644) or
+                (name == 'root.sub' and value[0] == 040000) or
+                (name == 'inodes' and value[0] == 040000))
+
+        commit_tree = self.git.tree(self.commit_tree_id)
+        commit_tree[name] = value
+
+        commit = dulwich.objects.Commit()
+        commit.tree = commit_tree.id
+        commit.author = commit.committer = "Spaghetti User <noreply@grep.ro>"
+        commit.commit_time = commit.author_time = int(time())
+        commit.commit_timezone = commit.author_timezone = 2*60*60
+        commit.encoding = "UTF-8"
+        commit.message = "Auto commit"
+
+        log.info('Committing %s', commit_tree.id)
+
+        self.git.object_store.add_object(commit_tree)
+        self.git.object_store.add_object(commit)
+        self.commit_tree_id = commit_tree.id
+        self.git.refs['refs/heads/master'] = commit.id
 
 class StorageDir(UserDict.DictMixin):
     is_dir = True
@@ -206,18 +245,40 @@ class StorageDir(UserDict.DictMixin):
             if key == name:
                 if value == '/':
                     sub = self.storage.git.tree(self.sub_id)
-                    sub_ls_id = sub[name + '.ls'][1]
+                    child_ls_id = sub[name + '.ls'][1]
                     try:
-                        sub_sub_id = sub[name + '.sub'][1]
+                        child_sub_id = sub[name + '.sub'][1]
                     except KeyError:
-                        sub_sub_id = None
-                    return StorageDir(name, sub_ls_id, sub_sub_id,
+                        child_sub_id = None
+                    return StorageDir(name, child_ls_id, child_sub_id,
                                       self.storage, self)
                 else:
                     inode = self.storage.get_inode(value)
                     return StorageFile(name, inode, self)
         else:
             raise KeyError('Folder entry %s not found' % repr(key))
+
+    def create_file(self, name):
+        # TODO: check name
+        # TODO: test creating files & folders in various places
+        inode = self.storage.create_inode()
+        ls_blob = self.storage.git.get_blob(self.ls_id)
+        ls_blob.data += "%s %s\n" % (name, inode.name)
+        self.storage.git.object_store.add_object(ls_blob)
+        self.ls_id = ls_blob.id
+        self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
+        return self[name]
+
+    def update_sub(self, name, value):
+        assert ((name.endswith('.ls') and value[0] == 0100644) or
+                (name.endswith('.sub') and value[0] == 040000))
+        log.info('Updating record %s in %s, value=%s',
+                 name, repr(self.path), value)
+        sub = self.storage.git.tree(self.sub_id)
+        sub[name] = value
+        self.sub_id = sub.id
+        self.storage.git.object_store.add_object(sub)
+        self.parent.update_sub(self.name + '.sub', (040000, self.sub_id))
 
 class StorageInode(object):
     def __init__(self, name, tree_id, storage):
@@ -228,7 +289,10 @@ class StorageInode(object):
 
     def get_data(self):
         git = self.storage.git
-        block0_id = git.tree(self.tree_id)['b0'][1]
+        try:
+            block0_id = git.tree(self.tree_id)['b0'][1]
+        except KeyError:
+            return ''
         log.debug('Loading block 0 of inode %s: %s',
                   repr(self.name), block0_id)
         block0 = git.get_blob(block0_id)
