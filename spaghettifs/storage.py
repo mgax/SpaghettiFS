@@ -1,6 +1,11 @@
 from time import time
 import UserDict
+import logging
+
 import dulwich
+
+log = logging.getLogger('spaghettifs.storage')
+log.setLevel(logging.DEBUG)
 
 class GitStorage(object):
     def __init__(self, repo_path):
@@ -29,6 +34,7 @@ class GitStorage(object):
         commit.message = "Auto commit: %s" % msg
         self.git.object_store.add_object(commit)
         self.git.refs['refs/heads/master'] = commit.id
+del GitStorage
 
 class StorageDir(UserDict.DictMixin):
     is_dir = True
@@ -87,6 +93,7 @@ class StorageDir(UserDict.DictMixin):
     def unlink(self):
         msg = "removing directory %s" % self.path
         self.parent.update(0, self.name, None, msg)
+del StorageDir
 
 class StorageFile(object):
     is_dir = False
@@ -146,3 +153,103 @@ class StorageFile(object):
     def unlink(self):
         msg = "removing file %s" % self.path
         self.parent.update(0, self.name, None, msg)
+del StorageFile
+
+class GitStorage(object):
+    def __init__(self, repo_path):
+        self.git = dulwich.repo.Repo(repo_path)
+        self.head = self.git.head()
+        self.commit_tree_id = self.git.commit(self.head).tree
+        log.debug('Loaded storage, head=%s', self.head)
+
+    def get_root(self):
+        commit_tree = self.git.tree(self.commit_tree_id)
+        root_ls_id = commit_tree['root.ls'][1]
+        root_sub_id = commit_tree['root.sub'][1]
+        root = StorageDir('[ROOT]', root_ls_id, root_sub_id, self, self)
+        root.path = '/'
+        return root
+
+    def get_inode(self, name):
+        commit_tree = self.git.tree(self.commit_tree_id)
+        inode_tree = self.git.tree(commit_tree['inodes'][1])
+        inode_id = inode_tree[name][1]
+        return StorageInode(name, inode_id, self)
+
+class StorageDir(UserDict.DictMixin):
+    is_dir = True
+
+    def __init__(self, name, ls_id, sub_id, storage, parent):
+        self.name = name
+        self.ls_id = ls_id # ID of blob that lists our contents
+        self.sub_id = sub_id # ID of tree that keeps our subfolders
+        self.storage = storage
+        self.parent = parent
+        log.debug('Loaded folder %s, ls_id=%s, sub_id=%s',
+                  repr(name), ls_id, sub_id)
+
+    @property
+    def path(self):
+        return self.parent.path + self.name + '/'
+
+    def _iter_contents(self):
+        ls_blob = self.storage.git.get_blob(self.ls_id)
+        for line in ls_blob.data.strip().split('\n'):
+            yield line.split(' ')
+
+    def keys(self):
+        for name, value in self._iter_contents():
+            yield name
+
+    def __getitem__(self, key):
+        for name, value in self._iter_contents():
+            if key == name:
+                if value == '/':
+                    sub = self.storage.git.tree(self.sub_id)
+                    sub_ls_id = sub[name + '.ls'][1]
+                    try:
+                        sub_sub_id = sub[name + '.sub'][1]
+                    except KeyError:
+                        sub_sub_id = None
+                    return StorageDir(name, sub_ls_id, sub_sub_id,
+                                      self.storage, self)
+                else:
+                    inode = self.storage.get_inode(value)
+                    return StorageFile(name, inode, self)
+        else:
+            raise KeyError('Folder entry %s not found' % repr(key))
+
+class StorageInode(object):
+    def __init__(self, name, tree_id, storage):
+        self.name = name
+        self.tree_id = tree_id
+        self.storage = storage
+        log.debug('Loaded inode %s, tree_id=%s', repr(name), tree_id)
+
+    def get_data(self):
+        git = self.storage.git
+        block0_id = git.tree(self.tree_id)['b0'][1]
+        log.debug('Loading block 0 of inode %s: %s',
+                  repr(self.name), block0_id)
+        block0 = git.get_blob(block0_id)
+        return block0.data
+
+class StorageFile(object):
+    is_dir = False
+
+    def __init__(self, name, inode, parent):
+        self.name = name
+        self.inode = inode
+        self.parent = parent
+
+    @property
+    def path(self):
+        return self.parent.path + self.name
+
+    @property
+    def size(self):
+        return len(self.data)
+
+    @property
+    def data(self):
+        return self.inode.get_data()

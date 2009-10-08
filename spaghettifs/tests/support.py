@@ -2,10 +2,15 @@ import unittest
 import tempfile
 import shutil
 from os import path
+import logging
 
 from spaghettifs.storage import GitStorage
 
-test_git_path = path.join(path.dirname(__file__), 'test.git')
+test_git_path = path.join(path.dirname(__file__), 'repo.git')
+
+stderr_handler = logging.StreamHandler()
+stderr_handler.setLevel(logging.ERROR)
+logging.getLogger('spaghettifs').addHandler(stderr_handler)
 
 class SpaghettiTestCase(unittest.TestCase):
     def setUp(self):

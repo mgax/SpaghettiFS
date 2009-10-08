@@ -1,7 +1,7 @@
 import unittest
+
 from support import SpaghettiTestCase
 from spaghettifs.storage import GitStorage
-
 
 class BackendTestCase(SpaghettiTestCase):
     def test_walk(self):
@@ -114,6 +114,10 @@ class BackendTestCase(SpaghettiTestCase):
         c_4 = repo4.get_root()['b']['c']
         self.assertEqual(set(c_4.keys()), set(['d.txt', 'e.txt']))
 
+del BackendTestCase.test_create_file
+del BackendTestCase.test_write_file_data
+del BackendTestCase.test_remove_file
+del BackendTestCase.test_make_directory
 
 if __name__ == '__main__':
     unittest.main()
