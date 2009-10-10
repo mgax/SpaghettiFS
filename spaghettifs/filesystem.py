@@ -4,10 +4,13 @@ from stat import S_IFDIR, S_IFREG
 from time import time
 import logging
 
-from fuse import FUSE, Operations, LoggingMixIn
+from fuse import FUSE, Operations
 from storage import GitStorage
 
-class SpaghettiFs(LoggingMixIn, Operations):
+log = logging.getLogger('spaghettifs.filesystem')
+log.setLevel(logging.DEBUG)
+
+class SpaghettiFS(Operations):
     def __init__(self, repo):
         self.repo = repo
 
@@ -20,6 +23,7 @@ class SpaghettiFs(LoggingMixIn, Operations):
             try:
                 obj = obj[frag]
             except KeyError:
+                log.error('Path %s not found', repr(path))
                 return None
 
         return obj
@@ -99,10 +103,23 @@ class SpaghettiFs(LoggingMixIn, Operations):
     releasedir = None
     statfs = None
 
+    def __call__(self, op, path, *args):
+        log.debug('FUSE api call: %s %s %s', op, path, repr(args))
+        ret = '[Unknown Error]'
+        try:
+            #ret = getattr(self, op)(path, *args)
+            ret = super(SpaghettiFS, self).__call__(op, path, *args)
+            return ret
+        except OSError, e:
+            ret = str(e)
+            raise
+        finally:
+            log.debug('FUSE api return: %s %s', op, repr(ret))
+
 def mount(repo_path, mount_path):
     stderr_handler = logging.StreamHandler()
     stderr_handler.setLevel(logging.DEBUG)
     logging.getLogger('spaghettifs').addHandler(stderr_handler)
 
-    fs = SpaghettiFs(GitStorage(repo_path))
+    fs = SpaghettiFS(GitStorage(repo_path))
     return FUSE(fs, mount_path, foreground=True)
