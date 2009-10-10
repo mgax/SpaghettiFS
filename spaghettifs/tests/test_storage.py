@@ -142,6 +142,36 @@ class BackendTestCase(SpaghettiTestCase):
             f2 = g2['f_%d' % c]
             self.assertEqual(f2.data, 'file contents %d' % c)
 
+    def test_dangerous_filenames(self):
+        g = self.repo.get_root()['b'].create_directory('g')
+        h = self.repo.get_root()['b'].create_directory('h')
+        fail_names = ['.', '..', '/', '', 'as/df']
+        ok_names = [' ', 'ab ', ' cd', 'as\0df', 'qwe\tr', 'zc\nvb', '"', "'",
+                    '(', ')', '-', '+', '\\', '=', '?', '*', '.x', '..x']
+
+        for name in fail_names:
+            self.assertRaises(ValueError, g.create_file, name)
+            self.assertRaises(ValueError, h.create_directory, name)
+
+        for name in ok_names:
+            g.create_file(name).write_data(repr(name*2), 0)
+            d = h.create_directory(name)
+            d.create_file('afile')
+            d.create_directory('adir')
+
+        self.assertEqual(set(ok_names), set(g.keys()))
+        self.assertEqual(set(ok_names), set(h.keys()))
+        for name in ok_names:
+            self.assertEqual(g[name].data, repr(name*2))
+            g[name].unlink()
+            self.assertEqual(set(h[name].keys()), set(['afile', 'adir']))
+            h[name]['afile'].unlink()
+            h[name]['adir'].unlink()
+            self.assertEqual(list(h[name].keys()), [])
+            h[name].unlink()
+
+        self.assertEqual(list(h.keys()), [])
+
 class GitStructureTestCase(SpaghettiTestCase):
     def test_commit_chain(self):
         def assert_head_ancestor(repo, ancestor_id):

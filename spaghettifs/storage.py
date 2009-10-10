@@ -1,6 +1,7 @@
 from time import time
 import UserDict
 import logging
+import binascii
 
 import dulwich
 
@@ -96,12 +97,13 @@ class StorageDir(UserDict.DictMixin):
         return self.parent.path + self.name + '/'
 
     def _iter_contents(self):
-        ls_blob = self.storage.git.get_blob(self.ls_id)
-        ls_data = ls_blob.data.strip()
-        if not ls_data:
-            return
+        ls_data = self.storage.git.get_blob(self.ls_id).data
         for line in ls_data.split('\n'):
-            yield line.split(' ')
+            if not line:
+                continue
+            name, value = line.rsplit(' ', 1)
+            yield unquote(name), value
+            #yield name, value
 
     def keys(self):
         for name, value in self._iter_contents():
@@ -112,9 +114,9 @@ class StorageDir(UserDict.DictMixin):
             if key == name:
                 if value == '/':
                     sub = self.storage.git.tree(self.sub_id)
-                    child_ls_id = sub[name + '.ls'][1]
+                    child_ls_id = sub[quote(name) + '.ls'][1]
                     try:
-                        child_sub_id = sub[name + '.sub'][1]
+                        child_sub_id = sub[quote(name) + '.sub'][1]
                     except KeyError:
                         child_sub_id = None
                     return StorageDir(name, child_ls_id, child_sub_id,
@@ -126,19 +128,17 @@ class StorageDir(UserDict.DictMixin):
             raise KeyError('Folder entry %s not found' % repr(key))
 
     def create_file(self, name):
-        # TODO: check name
-        # TODO: test creating files & folders in various places
+        check_filename(name)
         inode = self.storage.create_inode()
         ls_blob = self.storage.git.get_blob(self.ls_id)
-        ls_blob.data += "%s %s\n" % (name, inode.name)
+        ls_blob.data += "%s %s\n" % (quote(name), inode.name)
         self.storage.git.object_store.add_object(ls_blob)
         self.ls_id = ls_blob.id
         self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
         return self[name]
 
     def create_directory(self, name):
-        # TODO: check name
-
+        check_filename(name)
         log.info('Creating directory %s in %s', repr(name), repr(self.path))
 
         child_ls_blob = dulwich.objects.Blob.from_string('')
@@ -146,7 +146,7 @@ class StorageDir(UserDict.DictMixin):
         self.update_sub(name + '.ls', (0100644, child_ls_blob.id))
 
         ls_blob = self.storage.git.get_blob(self.ls_id)
-        ls_blob.data += "%s /\n" % name
+        ls_blob.data += "%s /\n" % quote(name)
         self.storage.git.object_store.add_object(ls_blob)
         self.ls_id = ls_blob.id
         self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
@@ -163,12 +163,13 @@ class StorageDir(UserDict.DictMixin):
         else:
             sub = self.storage.git.tree(self.sub_id)
         if value[1] is None:
-            del sub[name]
+            del sub[quote(name)]
         else:
-            sub[name] = value
+            sub[quote(name)] = value
         self.sub_id = sub.id
         self.storage.git.object_store.add_object(sub)
-        self.parent.update_sub(self.name + '.sub', (040000, self.sub_id))
+        self.parent.update_sub(self.name + '.sub',
+                               (040000, self.sub_id))
 
     def remove_ls_entry(self, rm_name):
         ls_data = ''
@@ -177,11 +178,12 @@ class StorageDir(UserDict.DictMixin):
                 log.debug('Removing ls entry %s from %s',
                           repr(rm_name), repr(self.path))
             else:
-                ls_data += '%s %s\n' % (name, value)
+                ls_data += '%s %s\n' % (quote(name), value)
         ls_blob = dulwich.objects.Blob.from_string(ls_data)
         self.storage.git.object_store.add_object(ls_blob)
         self.ls_id = ls_blob.id
-        self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
+        self.parent.update_sub(self.name + '.ls',
+                               (0100644, self.ls_id))
 
     def unlink(self):
         log.info('Removing folder %s', repr(self.path))
@@ -288,3 +290,12 @@ class StorageFile(object):
         log.info('Unlinking file %s', repr(self.path))
         self.parent.remove_ls_entry(self.name)
         self.inode.unlink()
+
+def quote(name):
+    return binascii.b2a_qp(name, quotetabs=True, istext=False)
+
+unquote = binascii.a2b_qp
+
+def check_filename(name):
+    if name in ('.', '..', '') or '/' in name:
+        raise ValueError("Bad filename %r" % name)
