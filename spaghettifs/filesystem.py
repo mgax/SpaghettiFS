@@ -123,10 +123,11 @@ def repr_log(value):
     else:
         return repr(value)
 
-def mount(repo_path, mount_path):
-    stderr_handler = logging.StreamHandler()
-    stderr_handler.setLevel(logging.DEBUG)
-    logging.getLogger('spaghettifs').addHandler(stderr_handler)
+def mount(repo_path, mount_path, default_logging=logging.ERROR):
+    if default_logging is not None:
+        stderr_handler = logging.StreamHandler()
+        stderr_handler.setLevel(default_logging)
+        logging.getLogger('spaghettifs').addHandler(stderr_handler)
 
     fs = SpaghettiFS(GitStorage(repo_path))
     return FUSE(fs, mount_path, foreground=True)
