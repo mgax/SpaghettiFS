@@ -95,7 +95,10 @@ class StorageDir(UserDict.DictMixin):
 
     def _iter_contents(self):
         ls_blob = self.storage.git.get_blob(self.ls_id)
-        for line in ls_blob.data.strip().split('\n'):
+        ls_data = ls_blob.data.strip()
+        if not ls_data:
+            return
+        for line in ls_data.split('\n'):
             yield line.split(' ')
 
     def keys(self):
@@ -168,7 +171,10 @@ class StorageDir(UserDict.DictMixin):
     def remove_ls_entry(self, rm_name):
         ls_data = ''
         for name, value in self._iter_contents():
-            if name is not rm_name:
+            if name == rm_name:
+                log.debug('Removing ls entry %s from %s',
+                          repr(rm_name), repr(self.path))
+            else:
                 ls_data += '%s %s\n' % (name, value)
         ls_blob = dulwich.objects.Blob.from_string(ls_data)
         self.storage.git.object_store.add_object(ls_blob)

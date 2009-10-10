@@ -85,11 +85,5 @@ class FuseMountTestCase(SpaghettiTestCase):
         os.rmdir(new_dir_path)
         self.assertFalse('newdir' in os.listdir(self.mount_point))
 
-del FuseMountTestCase.test_listing
-del FuseMountTestCase.test_read_file
-del FuseMountTestCase.test_write_file
-del FuseMountTestCase.test_unlink
-del FuseMountTestCase.test_mkdir_listdir_rmdir
-
 if __name__ == '__main__':
     unittest.main()

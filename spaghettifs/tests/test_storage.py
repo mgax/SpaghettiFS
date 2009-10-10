@@ -119,6 +119,13 @@ class BackendTestCase(SpaghettiTestCase):
         c_4 = repo4.get_root()['b']['c']
         self.assertEqual(set(c_4.keys()), set(['d.txt', 'e.txt']))
 
+    def test_empty_directory(self):
+        c = self.repo.get_root()['b']['c']
+        x = c.create_directory('x')
+        x.create_file('f')
+        x['f'].unlink()
+        self.assertEqual(set(x.keys()), set())
+
 del BackendTestCase.test_remove_file
 
 if __name__ == '__main__':

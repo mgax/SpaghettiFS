@@ -2,6 +2,8 @@ import os
 from errno import ENOENT
 from stat import S_IFDIR, S_IFREG
 from time import time
+import logging
+
 from fuse import FUSE, Operations, LoggingMixIn
 from storage import GitStorage
 
@@ -55,7 +57,7 @@ class SpaghettiFs(LoggingMixIn, Operations):
 
     def readdir(self, path, fh):
         obj = self.get_obj(path)
-        return ['.', '..'] + obj.keys()
+        return ['.', '..'] + list(obj.keys())
 
     def rmdir(self, path):
         obj = self.get_obj(path)
@@ -98,5 +100,9 @@ class SpaghettiFs(LoggingMixIn, Operations):
     statfs = None
 
 def mount(repo_path, mount_path):
+    stderr_handler = logging.StreamHandler()
+    stderr_handler.setLevel(logging.DEBUG)
+    logging.getLogger('spaghettifs').addHandler(stderr_handler)
+
     fs = SpaghettiFs(GitStorage(repo_path))
     return FUSE(fs, mount_path, foreground=True)
