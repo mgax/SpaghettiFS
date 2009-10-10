@@ -69,6 +69,7 @@ class GitStorage(object):
         commit.commit_timezone = commit.author_timezone = 2*60*60
         commit.encoding = "UTF-8"
         commit.message = "Auto commit"
+        commit.set_parents([self.git.head()])
 
         log.info('Committing %s', commit_tree.id)
 

@@ -1,4 +1,7 @@
+from os import path
 import unittest
+
+import dulwich
 
 from support import SpaghettiTestCase
 from spaghettifs.storage import GitStorage
@@ -125,6 +128,33 @@ class BackendTestCase(SpaghettiTestCase):
         x.create_file('f')
         x['f'].unlink()
         self.assertEqual(set(x.keys()), set())
+
+class GitStructureTestCase(SpaghettiTestCase):
+    def test_commit_chain(self):
+        def assert_head_ancestor(repo, ancestor_id):
+            commit = repo.commit(repo.head())
+            while True:
+                try:
+                    commit_id = commit.get_parents()[0]
+                except IndexError:
+                    self.fail('ancestor not in history of current head')
+
+                if commit_id == ancestor_id:
+                    return # we found the ancestor; test successful
+
+                commit = repo.commit(commit_id)
+
+        c = self.repo.get_root()['b']['c']
+        HEAD_0 = dulwich.repo.Repo(self.repo_path).head()
+        c.create_directory('x')
+
+        repo = dulwich.repo.Repo(self.repo_path)
+        HEAD_1 = repo.head()
+        assert_head_ancestor(repo, HEAD_0)
+
+        c['x'].create_file('f')
+        repo = dulwich.repo.Repo(self.repo_path)
+        assert_head_ancestor(repo, HEAD_1)
 
 del BackendTestCase.test_remove_file
 
