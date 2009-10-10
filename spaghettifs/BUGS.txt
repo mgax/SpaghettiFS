@@ -1,3 +1,5 @@
 Known bugs:
  1. can't create a file when there are no files in the filesystem (can't
     generate inode number)
+ 2. bad chars in filenames (spaces, newlines) choke the storage code
+ 3. logging - use '%r' instead of '%s' to get automatic repr() conversion
