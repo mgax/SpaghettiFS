@@ -10,154 +10,6 @@ log.setLevel(logging.DEBUG)
 class GitStorage(object):
     def __init__(self, repo_path):
         self.git = dulwich.repo.Repo(repo_path)
-        self.tree_git_id = self.git.commit(self.git.head()).tree
-
-    def get_root(self):
-        commit_tree = self.git.tree(self.tree_git_id)
-        root_id = dict((i[0], i[2]) for i in commit_tree.iteritems())['data']
-        root_tree = StorageDir(self.git, root_id, '[root]', self)
-        root_tree.path = '/'
-        return root_tree
-
-    def update(self, mode, name, git_id, msg):
-        commit_tree = self.git.tree(self.tree_git_id)
-        commit_tree.add(040000, 'data', git_id)
-        self.git.object_store.add_object(commit_tree)
-        self.tree_git_id = commit_tree.id
-
-        commit = dulwich.objects.Commit()
-        commit.tree = self.tree_git_id
-        commit.author = commit.committer = "Spaghetti User <noreply@grep.ro>"
-        commit.commit_time = commit.author_time = int(time())
-        commit.commit_timezone = commit.author_timezone = 2*60*60
-        commit.encoding = "UTF-8"
-        commit.message = "Auto commit: %s" % msg
-        self.git.object_store.add_object(commit)
-        self.git.refs['refs/heads/master'] = commit.id
-del GitStorage
-
-class StorageDir(UserDict.DictMixin):
-    is_dir = True
-
-    def __init__(self, git, git_id, name, parent):
-        self.git = git
-        self.git_id = git_id
-        self.name = name
-        self.parent = parent
-
-    @property
-    def path(self):
-        return self.parent.path + self.name + '/'
-
-    def itertree(self):
-        return self.git.tree(self.git_id).iteritems()
-
-    def __getitem__(self, key):
-        for name, mode, git_id in self.itertree():
-            if name == key:
-                if mode == 040000: # directory
-                    return StorageDir(self.git, git_id, name, self)
-                else: # regular file
-                    return StorageFile(self.git, git_id, name, self)
-        raise KeyError(key)
-
-    def keys(self):
-        return [name for (name, mode, git_id) in self.itertree()]
-
-    def update(self, mode, name, git_id, msg):
-        tree = self.git.tree(self.git_id)
-        if git_id is None:
-            del tree[name]
-        else:
-            tree.add(mode, name, git_id)
-        self.git.object_store.add_object(tree)
-        self.git_id = tree.id
-        self.parent.update(040000, self.name, self.git_id, msg)
-
-    def create_file(self, name):
-        # TODO: check name
-        blob = dulwich.objects.Blob.from_string('')
-        self.git.object_store.add_object(blob)
-        msg = "creating file %s" % (self.path + name)
-        self.update(0100644, name, blob.id, msg)
-        return self[name]
-
-    def create_directory(self, name):
-        # TODO: check name
-        tree = dulwich.objects.Tree()
-        self.git.object_store.add_object(tree)
-        msg = "creating directory %s" % (self.path + name)
-        self.update(040000, name, tree.id, msg)
-        return self[name]
-
-    def unlink(self):
-        msg = "removing directory %s" % self.path
-        self.parent.update(0, self.name, None, msg)
-del StorageDir
-
-class StorageFile(object):
-    is_dir = False
-
-    def __init__(self, git, git_id, name, parent):
-        self.git = git
-        self.git_id = git_id
-        self.name = name
-        self.parent = parent
-        self.blob = self.git.get_blob(git_id)
-        self.data = self.blob.data
-        self.size = len(self.blob.data)
-
-    @property
-    def path(self):
-        return self.parent.path + self.name
-
-    def _update_data(self, new_data, msg):
-        self.data = new_data
-        self.size = len(self.data)
-        self.blob = dulwich.objects.Blob.from_string(self.data)
-        self.git.object_store.add_object(self.blob)
-        self.git_id = self.blob.id
-        self.parent.update(0100644, self.name, self.git_id, msg)
-
-    def write_data(self, data, offset):
-        current_data = self.data
-        end = offset + len(data)
-
-        if len(current_data) <= offset:
-            new_data = (current_data +
-                        '\0' * (offset - len(current_data)) +
-                        data)
-
-        elif len(current_data) >= (end):
-            new_data = (current_data[:offset] +
-                        data +
-                        current_data[end:])
-
-        else:
-            new_data = (current_data[:offset] +
-                        data)
-
-        msg = ("updating file %s " % self.path +
-               "(offset %d, size %d)" % (offset, len(data)))
-        self._update_data(new_data, msg)
-
-    def truncate(self, size):
-        msg = "truncating file %s (new size %d)" % (self.path, size)
-        if len(self.data) > size:
-            self._update_data(self.data[:size], msg)
-        elif len(self.data) < size:
-            self._update_data(self.data + '\0' * (size - len(data)), msg)
-        else:
-            pass
-
-    def unlink(self):
-        msg = "removing file %s" % self.path
-        self.parent.update(0, self.name, None, msg)
-del StorageFile
-
-class GitStorage(object):
-    def __init__(self, repo_path):
-        self.git = dulwich.repo.Repo(repo_path)
         self.head = self.git.head()
         self.commit_tree_id = self.git.commit(self.head).tree
         log.debug('Loaded storage, head=%s', self.head)
@@ -191,6 +43,16 @@ class GitStorage(object):
         self.update_sub('inodes', (040000, inodes.id))
 
         return self.get_inode(inode_name)
+
+    def update_inode(self, inode_name, inode_contents_id):
+        inodes_id = self.git.tree(self.commit_tree_id)['inodes'][1]
+        inodes = self.git.tree(inodes_id)
+        if inode_contents_id is None:
+            del inodes[inode_name]
+        else:
+            inodes[inode_name] = (040000, inode_contents_id)
+        self.git.object_store.add_object(inodes)
+        self.update_sub('inodes', (040000, inodes.id))
 
     def update_sub(self, name, value):
         assert ((name == 'root.ls' and value[0] == 0100644) or
@@ -269,16 +131,56 @@ class StorageDir(UserDict.DictMixin):
         self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
         return self[name]
 
+    def create_directory(self, name):
+        # TODO: check name
+
+        log.info('Creating directory %s in %s', repr(name), repr(self.path))
+
+        child_ls_blob = dulwich.objects.Blob.from_string('')
+        self.storage.git.object_store.add_object(child_ls_blob)
+        self.update_sub(name + '.ls', (0100644, child_ls_blob.id))
+
+        ls_blob = self.storage.git.get_blob(self.ls_id)
+        ls_blob.data += "%s /\n" % name
+        self.storage.git.object_store.add_object(ls_blob)
+        self.ls_id = ls_blob.id
+        self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
+
+        return self[name]
+
     def update_sub(self, name, value):
         assert ((name.endswith('.ls') and value[0] == 0100644) or
                 (name.endswith('.sub') and value[0] == 040000))
         log.info('Updating record %s in %s, value=%s',
                  name, repr(self.path), value)
-        sub = self.storage.git.tree(self.sub_id)
-        sub[name] = value
+        if self.sub_id is None:
+            sub = dulwich.objects.Tree()
+        else:
+            sub = self.storage.git.tree(self.sub_id)
+        if value[1] is None:
+            del sub[name]
+        else:
+            sub[name] = value
         self.sub_id = sub.id
         self.storage.git.object_store.add_object(sub)
         self.parent.update_sub(self.name + '.sub', (040000, self.sub_id))
+
+    def remove_ls_entry(self, rm_name):
+        ls_data = ''
+        for name, value in self._iter_contents():
+            if name is not rm_name:
+                ls_data += '%s %s\n' % (name, value)
+        ls_blob = dulwich.objects.Blob.from_string(ls_data)
+        self.storage.git.object_store.add_object(ls_blob)
+        self.ls_id = ls_blob.id
+        self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
+
+    def unlink(self):
+        log.info('Removing folder %s', repr(self.path))
+        self.parent.update_sub(self.name + '.ls', (0100644, None))
+        if self.sub_id is not None:
+            self.parent.update_sub(self.name + '.sub', (040000, None))
+        self.parent.remove_ls_entry(self.name)
 
 class StorageInode(object):
     def __init__(self, name, tree_id, storage):
@@ -297,6 +199,56 @@ class StorageInode(object):
                   repr(self.name), block0_id)
         block0 = git.get_blob(block0_id)
         return block0.data
+
+    def _update_data(self, new_data):
+        block0 = dulwich.objects.Blob.from_string(new_data)
+        self.storage.git.object_store.add_object(block0)
+        tree = self.storage.git.tree(self.tree_id)
+        tree['b0'] = (0100644, block0.id)
+        self.storage.git.object_store.add_object(tree)
+        self.tree_id = tree.id
+        self.storage.update_inode(self.name, self.tree_id)
+
+    def write_data(self, data, offset):
+        log.info('Inode %s writing %d bytes at offset %d',
+                 repr(self.name), len(data), offset)
+
+        current_data = self.get_data()
+        end = offset + len(data)
+
+        if len(current_data) <= offset:
+            new_data = (current_data +
+                        '\0' * (offset - len(current_data)) +
+                        data)
+
+        elif len(current_data) >= (end):
+            new_data = (current_data[:offset] +
+                        data +
+                        current_data[end:])
+
+        else:
+            new_data = (current_data[:offset] +
+                        data)
+
+        self._update_data(new_data)
+
+    def truncate(self, new_size):
+        log.info("Truncating inode %s, new size %d", repr(self.name), new_size)
+
+        current_data = self.get_data()
+        current_size = len(current_data)
+
+        if current_size > new_size:
+            self._update_data(current_data[:new_size])
+        elif current_size < new_size:
+            padding = '\0' * (new_size - current_size)
+            self._update_data(current_data + padding)
+        else:
+            pass
+
+    def unlink(self):
+        log.info('Unlinking inode %s', repr(self.name))
+        self.storage.update_inode(self.name, None)
 
 class StorageFile(object):
     is_dir = False
@@ -317,3 +269,14 @@ class StorageFile(object):
     @property
     def data(self):
         return self.inode.get_data()
+
+    def write_data(self, data, offset):
+        return self.inode.write_data(data, offset)
+
+    def truncate(self, new_size):
+        return self.inode.truncate(new_size)
+
+    def unlink(self):
+        log.info('Unlinking file %s', repr(self.path))
+        self.parent.remove_ls_entry(self.name)
+        self.inode.unlink()

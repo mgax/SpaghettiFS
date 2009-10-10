@@ -64,6 +64,11 @@ class BackendTestCase(SpaghettiTestCase):
         self.assertEqual(h_txt.data, 'hello git!\0\0\0:)')
         assert_git_contents('hello git!\0\0\0:)')
 
+        h_txt.truncate(17)
+        self.assertEqual(h_txt.size, 17)
+        self.assertEqual(h_txt.data, 'hello git!\0\0\0:)\0\0')
+        assert_git_contents('hello git!\0\0\0:)\0\0')
+
         h_txt.truncate(5)
         self.assertEqual(h_txt.size, 5)
         self.assertEqual(h_txt.data, 'hello')
@@ -114,9 +119,7 @@ class BackendTestCase(SpaghettiTestCase):
         c_4 = repo4.get_root()['b']['c']
         self.assertEqual(set(c_4.keys()), set(['d.txt', 'e.txt']))
 
-del BackendTestCase.test_write_file_data
 del BackendTestCase.test_remove_file
-del BackendTestCase.test_make_directory
 
 if __name__ == '__main__':
     unittest.main()
