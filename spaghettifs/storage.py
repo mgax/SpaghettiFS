@@ -31,8 +31,9 @@ class GitStorage(object):
     def create_inode(self):
         inodes_id = self.git.tree(self.commit_tree_id)['inodes'][1]
         inodes = self.git.tree(inodes_id)
-        last_inode_name = max(i[0] for i in inodes.iteritems())
-        inode_name = 'i' + str(int(last_inode_name[1:]) + 1)
+        # TODO: find a better way to choose the inode number
+        last_inode_number = max(int(i[0][1:]) for i in inodes.iteritems())
+        inode_name = 'i' + str(last_inode_number + 1)
 
         inode_contents = dulwich.objects.Tree()
         self.git.object_store.add_object(inode_contents)

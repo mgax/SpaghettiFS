@@ -129,6 +129,19 @@ class BackendTestCase(SpaghettiTestCase):
         x['f'].unlink()
         self.assertEqual(set(x.keys()), set())
 
+    def test_30_files(self):
+        b = self.repo.get_root()['b']
+        g = b.create_directory('g')
+        for c in xrange(30):
+            f = g.create_file('f_%d' % c)
+            f.write_data('file contents %d' % c, 0)
+
+        repo2 = GitStorage(self.repo_path)
+        g2 = repo2.get_root()['b']['g']
+        for c in xrange(30):
+            f2 = g2['f_%d' % c]
+            self.assertEqual(f2.data, 'file contents %d' % c)
+
 class GitStructureTestCase(SpaghettiTestCase):
     def test_commit_chain(self):
         def assert_head_ancestor(repo, ancestor_id):
