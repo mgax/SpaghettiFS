@@ -4,8 +4,9 @@ from os import path
 import sys
 import subprocess
 import time
-from support import SpaghettiTestCase
 
+from support import SpaghettiTestCase
+from spaghettifs.filesystem import repr_log
 
 class FuseMountTestCase(SpaghettiTestCase):
     def setUp(self):
@@ -84,6 +85,17 @@ class FuseMountTestCase(SpaghettiTestCase):
 
         os.rmdir(new_dir_path)
         self.assertFalse('newdir' in os.listdir(self.mount_point))
+
+class FilesystemLoggingTestCase(unittest.TestCase):
+    def test_custom_repr(self):
+        self.assertEqual(repr_log('asdf'), repr('asdf'))
+        self.assertEqual(repr_log('"'), repr('"'))
+        self.assertEqual(repr_log('\''), repr('\''))
+        self.assertEqual(repr_log(u'q'), repr(u'q'))
+        self.assertEqual(repr_log('qwer'*64),  "'qwerqwerqw[...(len=256)]'")
+        self.assertEqual(repr_log(u'asdf'*64), "u'asdfasdfa[...(len=256)]'")
+        self.assertEqual(repr_log(range(3)), '[0, 1, 2]')
+        self.assertEqual(repr_log(range(100)), repr(range(100)))
 
 if __name__ == '__main__':
     unittest.main()

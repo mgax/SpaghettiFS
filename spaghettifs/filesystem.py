@@ -104,17 +104,24 @@ class SpaghettiFS(Operations):
     statfs = None
 
     def __call__(self, op, path, *args):
-        log.debug('FUSE api call: %s %s %s', op, path, repr(args))
+        args_repr = '[%s]' % ','.join(repr_log(arg) for arg in args)
+        log.debug('FUSE api call: %s %s %s', op, path, args_repr)
         ret = '[Unknown Error]'
         try:
-            #ret = getattr(self, op)(path, *args)
             ret = super(SpaghettiFS, self).__call__(op, path, *args)
             return ret
         except OSError, e:
             ret = str(e)
             raise
         finally:
-            log.debug('FUSE api return: %s %s', op, repr(ret))
+            log.debug('FUSE api return: %s %s', op, repr_log(ret))
+
+def repr_log(value):
+    if isinstance(value, basestring) and len(value) > 20:
+        r = repr(value[:12])
+        return '%s[...(len=%d)]%s' % (r[:11], len(value), r[-1])
+    else:
+        return repr(value)
 
 def mount(repo_path, mount_path):
     stderr_handler = logging.StreamHandler()
