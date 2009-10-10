@@ -1,0 +1,3 @@
+Known bugs:
+ 1. can't create a file when there are no files in the filesystem (can't
+    generate inode number)
