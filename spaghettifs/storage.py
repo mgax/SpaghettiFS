@@ -101,7 +101,11 @@ class StorageDir(UserDict.DictMixin):
         for line in ls_data.split('\n'):
             if not line:
                 continue
-            name, value = line.rsplit(' ', 1)
+            try:
+                name, value = line.rsplit(' ', 1)
+            except ValueError, e:
+                log.error('Bad line in ls file %r: %r', self.path, line)
+                raise
             yield unquote(name), value
             #yield name, value
 
@@ -292,10 +296,11 @@ class StorageFile(object):
         self.inode.unlink()
 
 def quote(name):
-    return binascii.b2a_qp(name, quotetabs=True, istext=False)
+    return (binascii.b2a_qp(name, quotetabs=True, istext=False)
+            .replace('=\n', ''))
 
 unquote = binascii.a2b_qp
 
 def check_filename(name):
-    if name in ('.', '..', '') or '/' in name:
+    if name in ('.', '..', '') or '/' in name or len(name) > 255:
         raise ValueError("Bad filename %r" % name)

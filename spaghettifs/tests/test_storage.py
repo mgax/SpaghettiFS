@@ -145,9 +145,10 @@ class BackendTestCase(SpaghettiTestCase):
     def test_dangerous_filenames(self):
         g = self.repo.get_root()['b'].create_directory('g')
         h = self.repo.get_root()['b'].create_directory('h')
-        fail_names = ['.', '..', '/', '', 'as/df']
+        fail_names = ['.', '..', '/', '', 'as/df', 'x'*256]
         ok_names = [' ', 'ab ', ' cd', 'as\0df', 'qwe\tr', 'zc\nvb', '"', "'",
-                    '(', ')', '-', '+', '\\', '=', '?', '*', '.x', '..x']
+                    '(', ')', '-', '+', '\\', '=', '?', '*', '.x', '..x',
+                    'x'*255]
 
         for name in fail_names:
             self.assertRaises(ValueError, g.create_file, name)
