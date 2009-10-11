@@ -7,5 +7,5 @@ Missing features:
  - fsck
 
 Performance issues:
- - each file is stored in a single Git blob (TODO: use fixed-size blocks)
  - every single filesystem operation creates a commit (TODO: write buffering)
+ - inodes, inode blocks and folder contents are stored as flat lists

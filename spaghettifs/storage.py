@@ -2,6 +2,7 @@ from time import time
 import UserDict
 import logging
 import binascii
+from cStringIO import StringIO
 
 import dulwich
 
@@ -196,22 +197,13 @@ class StorageDir(UserDict.DictMixin):
         self.parent.remove_ls_entry(self.name)
 
 class StorageInode(object):
+    blocksize = 64*1024 # 64 KB
+
     def __init__(self, name, tree_id, storage):
         self.name = name
         self.tree_id = tree_id
         self.storage = storage
         log.debug('Loaded inode %s, tree_id=%s', repr(name), tree_id)
-
-    def get_data(self):
-        git = self.storage.git
-        try:
-            block0_id = git.tree(self.tree_id)['b0'][1]
-        except KeyError:
-            return ''
-        log.debug('Loading block 0 of inode %s: %s',
-                  repr(self.name), block0_id)
-        block0 = git.get_blob(block0_id)
-        return block0.data
 
     def _update_data(self, new_data):
         block0 = dulwich.objects.Blob.from_string(new_data)
@@ -222,42 +214,140 @@ class StorageInode(object):
         self.tree_id = tree.id
         self.storage.update_inode(self.name, self.tree_id)
 
+    def read_block(self, n):
+        block_name = 'b%d' % (n * self.blocksize)
+        try:
+            block_id = self.storage.git.tree(self.tree_id)[block_name][1]
+        except KeyError:
+            # TODO: raise exception
+            return ''
+
+        log.debug('Reading block %r of inode %r: %r',
+                  block_name, self.name, block_id)
+        return self.storage.git.get_blob(block_id).data
+
+    def write_block(self, n, data):
+        block_name = 'b%d' % (n * self.blocksize)
+        block_blob = dulwich.objects.Blob.from_string(data)
+        block_id = block_blob.id
+
+        log.debug('Writing block %r of inode %r: %r',
+                  block_name, self.name, block_id)
+        tree = self.storage.git.tree(self.tree_id)
+        tree[block_name] = (0100644, block_id)
+        self.storage.git.object_store.add_object(block_blob)
+        self.storage.git.object_store.add_object(tree)
+        self.tree_id = tree.id
+        self.storage.update_inode(self.name, self.tree_id)
+
+    def delete_block(self, n):
+        block_name = 'b%d' % (n * self.blocksize)
+        log.debug('Removing block %r of inode %r', block_name, self.name)
+        tree = self.storage.git.tree(self.tree_id)
+        del tree[block_name]
+        self.storage.git.object_store.add_object(tree)
+        self.tree_id = tree.id
+        self.storage.update_inode(self.name, self.tree_id)
+
+    def get_size(self):
+        block_tree = self.storage.git.tree(self.tree_id)
+
+        last_block_offset = None
+        for entry in block_tree.iteritems():
+            block_offset = int(entry[0][1:])
+            if block_offset > last_block_offset:
+                last_block_offset = block_offset
+                last_block_id = entry[2]
+
+        if last_block_offset is None:
+            return 0
+        else:
+            last_block_blob = self.storage.git.get_blob(last_block_id)
+            return last_block_offset + len(last_block_blob.data)
+
+    def read_data(self, offset, length):
+        end = offset + length
+        first_block = offset / self.blocksize
+        last_block = end / self.blocksize
+
+        output = StringIO()
+        for n_block in range(first_block, last_block+1):
+            block_offset = n_block * self.blocksize
+
+            fragment_offset = 0
+            if n_block == first_block:
+                fragment_offset = offset - block_offset
+
+            fragment_end = self.blocksize
+            if n_block == last_block:
+                fragment_end = end - block_offset
+
+            block_data = self.read_block(n_block)
+            fragment = block_data[fragment_offset:fragment_end]
+            assert len(fragment) == fragment_end - fragment_offset
+            output.write(fragment)
+
+        output = output.getvalue()
+        assert len(output) == length
+        return output
+
     def write_data(self, data, offset):
+        current_size = self.get_size()
+        if current_size < offset:
+            self.truncate(offset)
+
         log.info('Inode %s writing %d bytes at offset %d',
                  repr(self.name), len(data), offset)
 
-        current_data = self.get_data()
         end = offset + len(data)
+        first_block = offset / self.blocksize
+        last_block = end / self.blocksize
 
-        if len(current_data) <= offset:
-            new_data = (current_data +
-                        '\0' * (offset - len(current_data)) +
-                        data)
+        for n_block in range(first_block, last_block+1):
+            block_offset = n_block * self.blocksize
 
-        elif len(current_data) >= (end):
-            new_data = (current_data[:offset] +
-                        data +
-                        current_data[end:])
+            insert_offset = 0
+            if n_block == first_block:
+                insert_offset = offset - block_offset
 
-        else:
-            new_data = (current_data[:offset] +
-                        data)
+            insert_end = self.blocksize
+            if n_block == last_block:
+                insert_end = end - block_offset
 
-        self._update_data(new_data)
+            data_start = block_offset + insert_offset - offset
+            data_end = block_offset + insert_end - offset
+
+            log.debug('Updating inode %d between (%d, %d) '
+                      'with data slice between (%d, %d)',
+                      n_block, insert_offset, insert_end,
+                      data_start, data_end)
+
+            current_data = self.read_block(n_block)
+            datafile = StringIO()
+            datafile.write(current_data)
+            datafile.seek(insert_offset)
+            datafile.write(data[data_start:data_end])
+            self.write_block(n_block, datafile.getvalue())
 
     def truncate(self, new_size):
         log.info("Truncating inode %s, new size %d", repr(self.name), new_size)
 
-        current_data = self.get_data()
-        current_size = len(current_data)
+        current_size = self.get_size()
+        if current_size < new_size:
+            # TODO: avoid creating one big string
+            self.write_data('\0' * (new_size - current_size), current_size)
 
-        if current_size > new_size:
-            self._update_data(current_data[:new_size])
-        elif current_size < new_size:
-            padding = '\0' * (new_size - current_size)
-            self._update_data(current_data + padding)
-        else:
-            pass
+        elif current_size > new_size:
+            first_block = new_size / self.blocksize
+            last_block = current_size / self.blocksize
+            truncate_offset = new_size % self.blocksize
+
+            for n_block in range(first_block, last_block+1):
+                if n_block == first_block and truncate_offset > 0:
+                    old_data = self.read_block(n_block)
+                    self.write_block(n_block, old_data[:truncate_offset])
+                else:
+                    self.delete_block(n_block)
 
     def unlink(self):
         log.info('Unlinking inode %s', repr(self.name))
@@ -277,11 +367,14 @@ class StorageFile(object):
 
     @property
     def size(self):
-        return len(self.data)
+        return self.inode.get_size()
 
     @property
     def data(self):
-        return self.inode.get_data()
+        return self.read_data(0, self.inode.get_size())
+
+    def read_data(self, offset, length):
+        return self.inode.read_data(offset, length)
 
     def write_data(self, data, offset):
         return self.inode.write_data(data, offset)

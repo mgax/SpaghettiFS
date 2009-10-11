@@ -214,8 +214,9 @@ class LargeFileTestCase(SpaghettiTestCase):
 
     def test_truncate(self):
         f = self.repo.get_root()['b'].create_file('f')
-        f.write_data(self.large_data[:477*1024], 0)
+        f.write_data(self.large_data[:877*1024], 0)
         f.truncate(400*1024)
+        self.assert_file_contents(self.large_data[:400*1024])
         f.write_data(self.large_data[400*1024:], 400*1024)
         self.assert_file_contents(self.large_data)
 
