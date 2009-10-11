@@ -1,10 +1,19 @@
 from os import path
 import unittest
+from cStringIO import StringIO
+import random
+import struct
 
 import dulwich
 
-from support import SpaghettiTestCase
+from support import SpaghettiTestCase, setup_logger
 from spaghettifs.storage import GitStorage
+
+def randomdata(size):
+    f = StringIO()
+    for c in xrange(size / 8 + 1):
+        f.write(struct.pack('Q', random.getrandbits(64)))
+    return f.getvalue()[:size]
 
 class BackendTestCase(SpaghettiTestCase):
     def test_walk(self):
@@ -172,6 +181,130 @@ class BackendTestCase(SpaghettiTestCase):
             h[name].unlink()
 
         self.assertEqual(list(h.keys()), [])
+
+class LargeFileTestCase(SpaghettiTestCase):
+    large_data = randomdata(1024 * 1024) # 1 MB
+
+    def assert_file_contents(self, reference):
+        repo2 = GitStorage(self.repo_path)
+        f = repo2.get_root()['b']['f']
+        self.assertEqual(f.data, reference,
+                         '`f.data` and `reference` do not match')
+
+    def test_store(self):
+        f = self.repo.get_root()['b'].create_file('f')
+        f.write_data(self.large_data, 0)
+        self.assert_file_contents(self.large_data)
+
+    def test_write_chunks(self):
+        f = self.repo.get_root()['b'].create_file('f')
+        block_size = 64*1024 # 64 KB
+        for offset in xrange(0, len(self.large_data), block_size):
+            f.write_data(self.large_data[offset:offset + block_size], offset)
+        self.assert_file_contents(self.large_data)
+
+    def test_write_random(self):
+        f = self.repo.get_root()['b'].create_file('f')
+        block_size = 39 * 1024 # 39 KB
+        offsets = range(0, len(self.large_data), block_size)
+        random.shuffle(offsets)
+        for offset in offsets:
+            f.write_data(self.large_data[offset:offset + block_size], offset)
+        self.assert_file_contents(self.large_data)
+
+    def test_truncate(self):
+        f = self.repo.get_root()['b'].create_file('f')
+        f.write_data(self.large_data[:477*1024], 0)
+        f.truncate(400*1024)
+        f.write_data(self.large_data[400*1024:], 400*1024)
+        self.assert_file_contents(self.large_data)
+
+    def test_write_at_boundaries(self):
+        # TODO: don't assume a 64 KB block size
+        kb64 = 64*1024
+        b = self.repo.get_root()['b']
+
+        f = b.create_file('f')
+        f.write_data('', 0)
+        self.assert_file_contents('')
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data(self.large_data[:kb64-1], 0)
+        self.assert_file_contents(self.large_data[:kb64-1])
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data(self.large_data[:kb64], 0)
+        self.assert_file_contents(self.large_data[:kb64])
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data(self.large_data[:kb64+1], 0)
+        self.assert_file_contents(self.large_data[:kb64+1])
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('', kb64)
+        self.assert_file_contents('\0' * kb64)
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('', 3*kb64 + 500)
+        self.assert_file_contents('\0' * (3 * kb64 + 500))
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('x', kb64 - 1)
+        self.assert_file_contents('\0' * (kb64 - 1) + 'x')
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('x', kb64)
+        self.assert_file_contents('\0' * (kb64) + 'x')
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('', 3*kb64)
+        self.assert_file_contents('_' * 10*kb64)
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('', 3*kb64-1)
+        self.assert_file_contents('_' * 10*kb64)
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('', 3*kb64+1)
+        self.assert_file_contents('_' * 10*kb64)
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('x', 3*kb64 - 1)
+        self.assert_file_contents('_' * (3*kb64-1) + 'x' + '_' * (7*kb64))
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('x', 3*kb64)
+        self.assert_file_contents('_' * (3*kb64) + 'x' + '_' * (7*kb64-1))
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('x', 3*kb64+1)
+        self.assert_file_contents('_' * (3*kb64+1) + 'x' + '_' * (7*kb64-2))
+        f.unlink()
+
+        f = b.create_file('f')
+        f.write_data('_' * 10 * kb64, 0)
+        f.write_data('xy', 3*kb64-1)
+        self.assert_file_contents('_' * (3*kb64-1) + 'xy' + '_' * (7*kb64-1))
+        f.unlink()
 
 class GitStructureTestCase(SpaghettiTestCase):
     def test_commit_chain(self):

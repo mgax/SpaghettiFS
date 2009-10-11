@@ -21,3 +21,9 @@ class SpaghettiTestCase(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
+
+def setup_logger(log_level):
+    import logging
+    stderr_handler = logging.StreamHandler()
+    stderr_handler.setLevel(getattr(logging, log_level))
+    logging.getLogger('spaghettifs').addHandler(stderr_handler)
