@@ -200,7 +200,5 @@ class GitStructureTestCase(SpaghettiTestCase):
         repo = dulwich.repo.Repo(self.repo_path)
         assert_head_ancestor(repo, HEAD_1)
 
-del BackendTestCase.test_remove_file
-
 if __name__ == '__main__':
     unittest.main()

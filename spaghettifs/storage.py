@@ -107,7 +107,6 @@ class StorageDir(UserDict.DictMixin):
                 log.error('Bad line in ls file %r: %r', self.path, line)
                 raise
             yield unquote(name), value
-            #yield name, value
 
     def keys(self):
         for name, value in self._iter_contents():
