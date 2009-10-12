@@ -11,4 +11,5 @@ setup(
     license = "BSD License",
     keywords = "hello world example examples",
     url = "http://github.com/alex-morega/spaghettifs",
+    test_suite = "spaghettifs.tests.all",
 )
