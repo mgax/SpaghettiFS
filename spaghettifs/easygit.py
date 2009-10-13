@@ -5,25 +5,17 @@ import dulwich
 class EasyTree(object):
     _git_tree = None
 
-    def __init__(self, git_repo, git_id=None):
+    def __init__(self, git_repo, git_id=None, parent=None, name=None):
         self.git = git_repo
         if git_id is None:
             git_tree = dulwich.objects.Tree()
             self.git.object_store.add_object(git_tree)
             git_id = git_tree.id
         self.git_id = git_id
+        self.parent = parent
+        self.name = name
 
-    def __enter__(self):
-        assert self._git_tree is None
-        self._git_tree = dulwich.objects.Tree()
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        assert self._git_tree is not None
-        self.git.object_store.add_object(self._git_tree)
-        self.git_id = self._git_tree.id
-        del self._git_tree
-
-    def __setitem__(self, key, value):
+    def _set(self, key, value):
         assert self._git_tree is not None
         if isinstance(value, EasyTree):
             assert value._git_tree is None
@@ -34,12 +26,27 @@ class EasyTree(object):
         else:
             assert False
 
+    def __enter__(self):
+        assert self._git_tree is None
+        self._git_tree = dulwich.objects.Tree()
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        assert self._git_tree is not None
+        self.git.object_store.add_object(self._git_tree)
+        self.git_id = self._git_tree.id
+        del self._git_tree
+
+        if self.parent is not None:
+            with self.parent as p:
+                p._set(self.name, self)
+
     def __getitem__(self, key):
         mode, child_git_id = self.git.tree(self.git_id)[key]
         if mode == 040000:
-            return EasyTree(self.git, child_git_id)
+            return EasyTree(self.git, child_git_id, self, key)
         elif mode == 0100644:
-            return EasyBlob(self.git, child_git_id)
+            return EasyBlob(self.git, child_git_id, self, key)
         else:
             raise ValueError('Unexpected mode %r' % mode)
 
@@ -54,23 +61,30 @@ class EasyTree(object):
 class EasyBlob(object):
     _git_blob = None
 
-    def __init__(self, git_repo, git_id=None):
+    def __init__(self, git_repo, git_id=None, parent=None, name=None):
         self.git = git_repo
         if git_id is None:
             git_blob = dulwich.objects.Blob.from_string('')
             self.git.object_store.add_object(git_blob)
             git_id = git_blob.id
         self.git_id = git_id
+        self.parent = parent
+        self.name = name
 
     def __enter__(self):
         assert self._git_blob is None
         self._git_blob = dulwich.objects.Blob.from_string('')
+        return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         assert self._git_blob is not None
         self.git.object_store.add_object(self._git_blob)
         self.git_id = self._git_blob.id
         del self._git_blob
+
+        if self.parent is not None:
+            with self.parent as p:
+                p._set(self.name, self)
 
     def get_data(self):
         return self.git.get_blob(self.git_id).data

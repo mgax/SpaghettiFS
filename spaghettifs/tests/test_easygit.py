@@ -35,7 +35,7 @@ class BasicTestCase(unittest.TestCase):
         t1 = self.eg.new_tree()
         t2 = self.eg.new_tree()
         with t1:
-            t1['t2'] = t2
+            t1._set('t2', t2)
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
                        message="test commit with tree",
                        tree=t1)
@@ -51,7 +51,7 @@ class BasicTestCase(unittest.TestCase):
         with b1:
             b1.data = 'hello blob!'
         with t1:
-            t1['b1'] = b1
+            t1._set('b1', b1)
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
                        message="test commit with blob",
                        tree=t1)
@@ -107,6 +107,31 @@ class RetrievalTestCase(unittest.TestCase):
         self.assertEqual(set(t2.keys()), set(['b2']))
         b2 = t2['b2']
         self.assertEqual(b2.data, 'b2 data')
+
+    def test_modify_tree(self):
+        t1 = self.eg.get_root()
+        with t1['t2'] as t2:
+            b3 = self.eg.new_blob()
+            with b3:
+                b3.data = 'asdf'
+            t2._set('b3', b3)
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="propagating changes",
+                       tree=t1)
+
+        eg2 = EasyGit.open_repo(self.repo_path)
+        self.assertEqual(eg2.get_root()['t2']['b3'].get_data(), 'asdf')
+
+    def test_modify_blob(self):
+        t1 = self.eg.get_root()
+        with t1['t2']['b2'] as b2:
+            b2.set_data('qwer')
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="propagating changes",
+                       tree=t1)
+
+        eg2 = EasyGit.open_repo(self.repo_path)
+        self.assertEqual(eg2.get_root()['t2']['b2'].get_data(), 'qwer')
 
 if __name__ == '__main__':
     unittest.main()
