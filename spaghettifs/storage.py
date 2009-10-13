@@ -9,37 +9,6 @@ import dulwich
 log = logging.getLogger('spaghettifs.storage')
 log.setLevel(logging.DEBUG)
 
-class FriendlyTree(object):
-    _git_tree = None
-
-    def __init__(self, git, parent_tree, name_in_parent, delegate, git_id):
-        self.git = git
-        self.parent_tree = parent_tree
-        self.name_in_parent = name_in_parent
-        self.delegate = delegate
-        self.git_id = git_id
-
-    def __enter__(self):
-        self._git_tree = self.git.tree(self.git_id)
-        return self
-
-    def __exit__(self, e_type, e_value, e_traceback):
-        self.git.add_object(self._git_tree)
-        self.git_id = self._git_tree.id
-        del self._git_tree
-        self.parent_tree[self.name_in_parent] = self
-
-    def __setitem__(self, key, value):
-        assert self._git_tree is not None
-        if value.is_tree:
-            self._git_tree[key] = (040000, value.git_id)
-        else:
-            self._git_tree[key] = (0100644, value.git_id)
-
-    def __delitem__(self, key):
-        assert self._git_tree is not None
-        del self._git_tree[key]
-
 class GitStorage(object):
     def __init__(self, repo_path):
         self.git = dulwich.repo.Repo(repo_path)

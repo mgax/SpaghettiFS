@@ -92,7 +92,7 @@ class EasyGit(object):
         self.git.refs['refs/heads/master'] = git_commit.id
 
     @classmethod
-    def new(cls, repo_path, bare=False):
+    def new_repo(cls, repo_path, bare=False):
         assert bare is True
         git_repo = dulwich.repo.Repo.init_bare(repo_path)
         return cls(git_repo)

@@ -6,10 +6,10 @@ import os
 import dulwich
 from spaghettifs.easygit import EasyGit
 
-class EasyGitTestCase(unittest.TestCase):
+class BasicTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()
-        self.eg = EasyGit.new(self.repo_path, bare=True)
+        self.eg = EasyGit.new_repo(self.repo_path, bare=True)
 
     def tearDown(self):
         shutil.rmtree(self.repo_path)
@@ -61,6 +61,16 @@ class EasyGitTestCase(unittest.TestCase):
         self.assertEqual(git_t.entries()[0][:2], (0100644, 'b1'))
         git_b = git.get_blob(git_t['b1'][1])
         self.assertEqual(git_b.data, "hello blob!")
+
+class RetrievalTestCase(unittest.TestCase):
+    def setUp(self):
+        self.repo_path = tempfile.mkdtemp()
+        git = dulwich.repo.Repo(self.repo_path)
+
+        self.eg = EasyGit.open_repo(self.repo_path)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo_path)
 
 if __name__ == '__main__':
     unittest.main()
