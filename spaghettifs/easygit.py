@@ -25,8 +25,44 @@ class EasyTree(object):
 
     def __setitem__(self, key, value):
         assert self._git_tree is not None
-        assert value._git_tree is None
-        self._git_tree[key] = (040000, value.git_id)
+        if isinstance(value, EasyTree):
+            assert value._git_tree is None
+            self._git_tree[key] = (040000, value.git_id)
+        elif isinstance(value, EasyBlob):
+            assert value._git_blob is None
+            self._git_tree[key] = (0100644, value.git_id)
+        else:
+            assert False
+
+class EasyBlob(object):
+    _git_blob = None
+
+    def __init__(self, git_repo, git_id=None):
+        self.git = git_repo
+        if git_id is None:
+            git_blob = dulwich.objects.Blob.from_string('')
+            self.git.object_store.add_object(git_blob)
+            git_id = git_blob.id
+        self.git_id = git_id
+
+    def __enter__(self):
+        assert self._git_blob is None
+        self._git_blob = dulwich.objects.Blob.from_string('')
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        assert self._git_blob is not None
+        self.git.object_store.add_object(self._git_blob)
+        self.git_id = self._git_blob.id
+        del self._git_blob
+
+    def get_data(self):
+        raise NotImplementedError
+
+    def set_data(self, value):
+        assert self._git_blob is not None
+        self._git_blob.data = value
+
+    data = property(get_data, set_data)
 
 class EasyGit(object):
     def __init__(self, git_repo):
@@ -34,6 +70,9 @@ class EasyGit(object):
 
     def new_tree(self):
         return EasyTree(self.git)
+
+    def new_blob(self):
+        return EasyBlob(self.git)
 
     def commit(self, author, message, tree):
         commit_time = int(time())

@@ -44,5 +44,23 @@ class EasyGitTestCase(unittest.TestCase):
         self.assertEqual(len(git_t.entries()), 1)
         self.assertEqual(git_t.entries()[0][:2], (040000, 't2'))
 
+    def test_commit_with_blob(self):
+        t1 = self.eg.new_tree()
+        b1 = self.eg.new_blob()
+        with b1:
+            b1.data = 'hello blob!'
+        with t1:
+            t1['b1'] = b1
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="test commit with blob",
+                       tree=t1)
+
+        git = dulwich.repo.Repo(self.repo_path)
+        git_t = git.tree(git.commit(git.head()).tree)
+        self.assertEqual(len(git_t.entries()), 1)
+        self.assertEqual(git_t.entries()[0][:2], (0100644, 'b1'))
+        git_b = git.get_blob(git_t['b1'][1])
+        self.assertEqual(git_b.data, "hello blob!")
+
 if __name__ == '__main__':
     unittest.main()
