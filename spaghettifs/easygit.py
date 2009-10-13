@@ -34,6 +34,23 @@ class EasyTree(object):
         else:
             assert False
 
+    def __getitem__(self, key):
+        mode, child_git_id = self.git.tree(self.git_id)[key]
+        if mode == 040000:
+            return EasyTree(self.git, child_git_id)
+        elif mode == 0100644:
+            return EasyBlob(self.git, child_git_id)
+        else:
+            raise ValueError('Unexpected mode %r' % mode)
+
+    def __iter__(self):
+        git_tree = self.git.tree(self.git_id)
+        for name, mode, child_git_id in git_tree.iteritems():
+            yield name
+
+    def keys(self):
+        return [name for name in self]
+
 class EasyBlob(object):
     _git_blob = None
 
@@ -56,7 +73,7 @@ class EasyBlob(object):
         del self._git_blob
 
     def get_data(self):
-        raise NotImplementedError
+        return self.git.get_blob(self.git_id).data
 
     def set_data(self, value):
         assert self._git_blob is not None
@@ -67,6 +84,10 @@ class EasyBlob(object):
 class EasyGit(object):
     def __init__(self, git_repo):
         self.git = git_repo
+
+    def get_root(self):
+        git_commit = self.git.commit(self.git.head())
+        return EasyTree(self.git, git_commit.tree)
 
     def new_tree(self):
         return EasyTree(self.git)
@@ -95,4 +116,9 @@ class EasyGit(object):
     def new_repo(cls, repo_path, bare=False):
         assert bare is True
         git_repo = dulwich.repo.Repo.init_bare(repo_path)
+        return cls(git_repo)
+
+    @classmethod
+    def open_repo(cls, repo_path):
+        git_repo = dulwich.repo.Repo(repo_path)
         return cls(git_repo)

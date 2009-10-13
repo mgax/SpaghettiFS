@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import shutil
 import os
+from time import time
 
 import dulwich
 from spaghettifs.easygit import EasyGit
@@ -65,12 +66,47 @@ class BasicTestCase(unittest.TestCase):
 class RetrievalTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()
-        git = dulwich.repo.Repo(self.repo_path)
+        git = dulwich.repo.Repo.init_bare(self.repo_path)
+        git_t1 = dulwich.objects.Tree()
+        git_t2 = dulwich.objects.Tree()
+        git_b1 = dulwich.objects.Blob.from_string('b1 data')
+        git_b2 = dulwich.objects.Blob.from_string('b2 data')
+        git.object_store.add_object(git_b1)
+        git.object_store.add_object(git_b2)
+        git_t2['b2'] = (0100644, git_b2.id)
+        git.object_store.add_object(git_t2)
+        git_t1['b1'] = (0100644, git_b1.id)
+        git_t1['t2'] = (040000, git_t2.id)
+        git.object_store.add_object(git_t1)
+
+        commit_time = int(time())
+        git_c = dulwich.objects.Commit()
+        git_c.commit_time = commit_time
+        git_c.author_time = commit_time
+        git_c.commit_timezone = 2*60*60
+        git_c.author_timezone = 2*60*60
+        git_c.author = "Spaghetti User <noreply@grep.ro>"
+        git_c.committer = git_c.author
+        git_c.message = "test fixture"
+        git_c.encoding = "UTF-8"
+        git_c.tree = git_t1.id
+        git.object_store.add_object(git_c)
+        git.refs['refs/heads/master'] = git_c.id
 
         self.eg = EasyGit.open_repo(self.repo_path)
 
     def tearDown(self):
         shutil.rmtree(self.repo_path)
+
+    def test_fetch_objects(self):
+        t1 = self.eg.get_root()
+        self.assertEqual(set(t1.keys()), set(['b1', 't2']))
+        b1 = t1['b1']
+        self.assertEqual(b1.data, 'b1 data')
+        t2 = t1['t2']
+        self.assertEqual(set(t2.keys()), set(['b2']))
+        b2 = t2['b2']
+        self.assertEqual(b2.data, 'b2 data')
 
 if __name__ == '__main__':
     unittest.main()
