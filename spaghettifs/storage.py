@@ -205,15 +205,6 @@ class StorageInode(object):
         self.storage = storage
         log.debug('Loaded inode %s, tree_id=%s', repr(name), tree_id)
 
-    def _update_data(self, new_data):
-        block0 = dulwich.objects.Blob.from_string(new_data)
-        self.storage.git.object_store.add_object(block0)
-        tree = self.storage.git.tree(self.tree_id)
-        tree['b0'] = (0100644, block0.id)
-        self.storage.git.object_store.add_object(tree)
-        self.tree_id = tree.id
-        self.storage.update_inode(self.name, self.tree_id)
-
     def read_block(self, n):
         block_name = 'b%d' % (n * self.blocksize)
         try:
