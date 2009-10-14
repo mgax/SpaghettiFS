@@ -16,19 +16,19 @@ class EasyTree(object):
         self.name = name
         self._ctx_count = 0
 
-    def _set(self, key, value):
+    def _set(self, name, value):
         if self._git_tree is None:
             with self:
-                return self._set(key, value)
+                return self._set(name, value)
 
         if value is None:
-            del self._git_tree[key]
+            del self._git_tree[name]
         elif isinstance(value, EasyTree):
             assert value._git_tree is None
-            self._git_tree[key] = (040000, value.git_id)
+            self._git_tree[name] = (040000, value.git_id)
         elif isinstance(value, EasyBlob):
             assert value._git_blob is None
-            self._git_tree[key] = (0100644, value.git_id)
+            self._git_tree[name] = (0100644, value.git_id)
         else:
             assert False
 
@@ -64,17 +64,17 @@ class EasyTree(object):
             with self.parent as p:
                 p._set(self.name, self)
 
-    def __getitem__(self, key):
-        mode, child_git_id = self.git.tree(self.git_id)[key]
+    def __getitem__(self, name):
+        mode, child_git_id = self.git.tree(self.git_id)[name]
         if mode == 040000:
-            return EasyTree(self.git, child_git_id, self, key)
+            return EasyTree(self.git, child_git_id, self, name)
         elif mode == 0100644:
-            return EasyBlob(self.git, child_git_id, self, key)
+            return EasyBlob(self.git, child_git_id, self, name)
         else:
             raise ValueError('Unexpected mode %r' % mode)
 
-    def __delitem__(self, key):
-        self._set(key, None)
+    def __delitem__(self, name):
+        self._set(name, None)
 
     def __iter__(self):
         git_tree = self.git.tree(self.git_id)
