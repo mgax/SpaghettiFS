@@ -12,4 +12,9 @@ setup(
     keywords = "hello world example examples",
     url = "http://github.com/alex-morega/spaghettifs",
     test_suite = "spaghettifs.tests.all",
+    entry_points = {
+        'console_scripts': [
+            'spaghettifs = spaghettifs.cmd:main',
+        ],
+    },
 )
