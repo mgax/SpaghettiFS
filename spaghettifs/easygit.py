@@ -14,9 +14,13 @@ class EasyTree(object):
         self.git_id = git_id
         self.parent = parent
         self.name = name
+        self._ctx_count = 0
 
     def _set(self, key, value):
-        assert self._git_tree is not None
+        if self._git_tree is None:
+            with self:
+                return self._set(key, value)
+
         if isinstance(value, EasyTree):
             assert value._git_tree is None
             self._git_tree[key] = (040000, value.git_id)
@@ -26,13 +30,30 @@ class EasyTree(object):
         else:
             assert False
 
+    def new_tree(self, name):
+        t = EasyTree(self.git, None, self, name)
+        self._set(name, t)
+        return t
+
+    def new_blob(self, name):
+        b = EasyBlob(self.git, None, self, name)
+        self._set(name, b)
+        return b
+
     def __enter__(self):
-        assert self._git_tree is None
-        self._git_tree = dulwich.objects.Tree()
+        if self._git_tree is None:
+            assert self._ctx_count == 0
+            self._git_tree = dulwich.objects.Tree()
+        self._ctx_count += 1
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        assert self._ctx_count > 0
         assert self._git_tree is not None
+        self._ctx_count -= 1
+        if self._ctx_count > 0:
+            return
+
         self.git.object_store.add_object(self._git_tree)
         self.git_id = self._git_tree.id
         del self._git_tree
@@ -70,14 +91,22 @@ class EasyBlob(object):
         self.git_id = git_id
         self.parent = parent
         self.name = name
+        self._ctx_count = 0
 
     def __enter__(self):
-        assert self._git_blob is None
-        self._git_blob = dulwich.objects.Blob.from_string('')
+        if self._git_blob is None:
+            assert self._ctx_count == 0
+            self._git_blob = dulwich.objects.Blob.from_string('')
+        self._ctx_count += 1
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        assert self._ctx_count > 0
         assert self._git_blob is not None
+        self._ctx_count -= 1
+        if self._ctx_count > 0:
+            return
+
         self.git.object_store.add_object(self._git_blob)
         self.git_id = self._git_blob.id
         del self._git_blob
@@ -98,18 +127,21 @@ class EasyBlob(object):
 class EasyGit(object):
     def __init__(self, git_repo):
         self.git = git_repo
+        try:
+            git_commit_id = self.git.head()
+        except:
+            root_id = None
+        else:
+            git_commit = self.git.commit(self.git.head())
+            root_id = git_commit.tree
 
-    def get_root(self):
-        git_commit = self.git.commit(self.git.head())
-        return EasyTree(self.git, git_commit.tree)
+        self.root = EasyTree(self.git, root_id, None, '[ROOT]')
 
-    def new_tree(self):
-        return EasyTree(self.git)
+#    def get_root(self):
+#        git_commit = self.git.commit(self.git.head())
+#        return EasyTree(self.git, git_commit.tree)
 
-    def new_blob(self):
-        return EasyBlob(self.git)
-
-    def commit(self, author, message, tree):
+    def commit(self, author, message):
         commit_time = int(time())
 
         git_commit = dulwich.objects.Commit()
@@ -121,7 +153,7 @@ class EasyGit(object):
         git_commit.committer = author
         git_commit.message = message
         git_commit.encoding = "UTF-8"
-        git_commit.tree = tree.git_id
+        git_commit.tree = self.root.git_id
 
         self.git.object_store.add_object(git_commit)
         self.git.refs['refs/heads/master'] = git_commit.id

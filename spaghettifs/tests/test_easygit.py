@@ -21,8 +21,7 @@ class BasicTestCase(unittest.TestCase):
 
     def test_initial_commit(self):
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="initial test commit",
-                       tree=self.eg.new_tree())
+                       message="initial test commit")
 
         git = dulwich.repo.Repo(self.repo_path)
         git_h = git.head()
@@ -32,13 +31,10 @@ class BasicTestCase(unittest.TestCase):
         self.assertEqual(git_c.get_parents(), [])
 
     def test_commit_with_tree(self):
-        t1 = self.eg.new_tree()
-        t2 = self.eg.new_tree()
-        with t1:
-            t1._set('t2', t2)
+        t1 = self.eg.root
+        t2 = t1.new_tree('t2')
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="test commit with tree",
-                       tree=t1)
+                       message="test commit with tree")
 
         git = dulwich.repo.Repo(self.repo_path)
         git_t = git.tree(git.commit(git.head()).tree)
@@ -46,15 +42,12 @@ class BasicTestCase(unittest.TestCase):
         self.assertEqual(git_t.entries()[0][:2], (040000, 't2'))
 
     def test_commit_with_blob(self):
-        t1 = self.eg.new_tree()
-        b1 = self.eg.new_blob()
+        t1 = self.eg.root
+        b1 = t1.new_blob('b1')
         with b1:
             b1.data = 'hello blob!'
-        with t1:
-            t1._set('b1', b1)
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="test commit with blob",
-                       tree=t1)
+                       message="test commit with blob")
 
         git = dulwich.repo.Repo(self.repo_path)
         git_t = git.tree(git.commit(git.head()).tree)
@@ -99,7 +92,7 @@ class RetrievalTestCase(unittest.TestCase):
         shutil.rmtree(self.repo_path)
 
     def test_fetch_objects(self):
-        t1 = self.eg.get_root()
+        t1 = self.eg.root
         self.assertEqual(set(t1.keys()), set(['b1', 't2']))
         b1 = t1['b1']
         self.assertEqual(b1.data, 'b1 data')
@@ -109,29 +102,56 @@ class RetrievalTestCase(unittest.TestCase):
         self.assertEqual(b2.data, 'b2 data')
 
     def test_modify_tree(self):
-        t1 = self.eg.get_root()
+        t1 = self.eg.root
         with t1['t2'] as t2:
-            b3 = self.eg.new_blob()
+            b3 = t2.new_blob('b3')
             with b3:
                 b3.data = 'asdf'
-            t2._set('b3', b3)
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="propagating changes",
-                       tree=t1)
+                       message="propagating changes")
 
         eg2 = EasyGit.open_repo(self.repo_path)
-        self.assertEqual(eg2.get_root()['t2']['b3'].get_data(), 'asdf')
+        self.assertEqual(eg2.root['t2']['b3'].get_data(), 'asdf')
 
     def test_modify_blob(self):
-        t1 = self.eg.get_root()
+        t1 = self.eg.root
         with t1['t2']['b2'] as b2:
             b2.set_data('qwer')
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="propagating changes",
-                       tree=t1)
+                       message="propagating changes")
 
         eg2 = EasyGit.open_repo(self.repo_path)
-        self.assertEqual(eg2.get_root()['t2']['b2'].get_data(), 'qwer')
+        self.assertEqual(eg2.root['t2']['b2'].get_data(), 'qwer')
+
+class ContextTestCase(unittest.TestCase):
+    def setUp(self):
+        self.repo_path = tempfile.mkdtemp()
+        self.eg = EasyGit.new_repo(self.repo_path, bare=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo_path)
+
+    def test_nested(self):
+        r = self.eg.root
+        with r:
+            with r:
+                with r:
+                    self.assertEqual(r._ctx_count, 3)
+                self.assertEqual(r._ctx_count, 2)
+            self.assertEqual(r._ctx_count, 1)
+        self.assertEqual(r._ctx_count, 0)
+        self.assertRaises(AssertionError, r.__exit__, None, None, None)
+
+        b = r.new_blob('b')
+        with b:
+            with b:
+                with b:
+                    self.assertEqual(b._ctx_count, 3)
+                self.assertEqual(b._ctx_count, 2)
+            self.assertEqual(b._ctx_count, 1)
+        self.assertEqual(b._ctx_count, 0)
+        self.assertRaises(AssertionError, b.__exit__, None, None, None)
+
 
 if __name__ == '__main__':
     unittest.main()
