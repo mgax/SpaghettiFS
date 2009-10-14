@@ -115,16 +115,16 @@ class EasyBlob(object):
             with self.parent as p:
                 p._set(self.name, self)
 
-    def get_data(self):
+    def _get_data(self):
         return self.git.get_blob(self.git_id).data
 
-    def set_data(self, value):
+    def _set_data(self, value):
         if self._git_blob is None:
             with self:
-                return self.set_data(value)
+                return self._set_data(value)
         self._git_blob.data = value
 
-    data = property(get_data, set_data)
+    data = property(_get_data, _set_data)
 
 class EasyGit(object):
     def __init__(self, git_repo):
@@ -138,10 +138,6 @@ class EasyGit(object):
             root_id = git_commit.tree
 
         self.root = EasyTree(self.git, root_id, None, '[ROOT]')
-
-#    def get_root(self):
-#        git_commit = self.git.commit(self.git.head())
-#        return EasyTree(self.git, git_commit.tree)
 
     def commit(self, author, message):
         commit_time = int(time())
