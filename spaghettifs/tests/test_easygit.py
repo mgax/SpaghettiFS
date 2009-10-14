@@ -149,6 +149,30 @@ class RetrievalTestCase(unittest.TestCase):
         self.assertEqual(root2['t4']['b5'].data, 'new b5')
         self.assertEqual(root2['b6'].data, 'new b6')
 
+    def test_remove_entry(self):
+        with self.eg.root as t1:
+            with t1['t2'] as t2:
+                del t2['b2']
+            del t1['b1']
+
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="removing entries")
+
+        eg2 = EasyGit.open_repo(self.repo_path)
+        self.assertEqual(eg2.root.keys(), ['t2'])
+        self.assertEqual(eg2.root['t2'].keys(), [])
+
+    def test_self_remove_entry(self):
+        with self.eg.root as t1:
+            t1['t2'].remove()
+            t1['b1'].remove()
+
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="removing entries")
+
+        eg2 = EasyGit.open_repo(self.repo_path)
+        self.assertEqual(eg2.root.keys(), [])
+
 class ContextTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()

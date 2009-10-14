@@ -21,7 +21,9 @@ class EasyTree(object):
             with self:
                 return self._set(key, value)
 
-        if isinstance(value, EasyTree):
+        if value is None:
+            del self._git_tree[key]
+        elif isinstance(value, EasyTree):
             assert value._git_tree is None
             self._git_tree[key] = (040000, value.git_id)
         elif isinstance(value, EasyBlob):
@@ -71,6 +73,9 @@ class EasyTree(object):
         else:
             raise ValueError('Unexpected mode %r' % mode)
 
+    def __delitem__(self, key):
+        self._set(key, None)
+
     def __iter__(self):
         git_tree = self.git.tree(self.git_id)
         for name, mode, child_git_id in git_tree.iteritems():
@@ -78,6 +83,9 @@ class EasyTree(object):
 
     def keys(self):
         return [name for name in self]
+
+    def remove(self):
+        del self.parent[self.name]
 
 class EasyBlob(object):
     _git_blob = None
@@ -125,6 +133,9 @@ class EasyBlob(object):
         self._git_blob.data = value
 
     data = property(_get_data, _set_data)
+
+    def remove(self):
+        del self.parent[self.name]
 
 class EasyGit(object):
     def __init__(self, git_repo):
