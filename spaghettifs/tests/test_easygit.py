@@ -123,6 +123,32 @@ class RetrievalTestCase(unittest.TestCase):
         eg2 = EasyGit.open_repo(self.repo_path)
         self.assertEqual(eg2.root['t2']['b2'].get_data(), 'qwer')
 
+    def test_modify_multiple(self):
+        with self.eg.root as root:
+            root['t2']['b2'].set_data('new b2')
+            with root.new_tree('t3') as t3:
+                t3.new_blob('b3').set_data('new b3')
+                t3.new_blob('b4').set_data('new b4')
+            with root.new_tree('t4') as t4:
+                t4.new_blob('b5').set_data('new b5')
+            root.new_blob('b6').set_data('new b6')
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="multiple changes")
+
+        eg2 = EasyGit.open_repo(self.repo_path)
+        root2 = eg2.root
+        self.assertEqual(set(root2.keys()),
+                         set(['b1', 't2', 't3', 't4', 'b6']))
+        self.assertEqual(root2['b1'].get_data(), 'b1 data')
+        self.assertEqual(set(root2['t2'].keys()), set(['b2']))
+        self.assertEqual(root2['t2']['b2'].get_data(), 'new b2')
+        self.assertEqual(set(root2['t3'].keys()), set(['b3', 'b4']))
+        self.assertEqual(root2['t3']['b3'].get_data(), 'new b3')
+        self.assertEqual(root2['t3']['b4'].get_data(), 'new b4')
+        self.assertEqual(set(root2['t4'].keys()), set(['b5']))
+        self.assertEqual(root2['t4']['b5'].get_data(), 'new b5')
+        self.assertEqual(root2['b6'].get_data(), 'new b6')
+
 class ContextTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()
@@ -151,6 +177,11 @@ class ContextTestCase(unittest.TestCase):
             self.assertEqual(b._ctx_count, 1)
         self.assertEqual(b._ctx_count, 0)
         self.assertRaises(AssertionError, b.__exit__, None, None, None)
+
+    def test_no_with(self):
+        r = self.eg.root
+        b = r.new_blob('b')
+        b.set_data('asdf')
 
 
 if __name__ == '__main__':

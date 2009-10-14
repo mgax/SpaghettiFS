@@ -43,7 +43,7 @@ class EasyTree(object):
     def __enter__(self):
         if self._git_tree is None:
             assert self._ctx_count == 0
-            self._git_tree = dulwich.objects.Tree()
+            self._git_tree = self.git.tree(self.git_id)
         self._ctx_count += 1
         return self
 
@@ -119,7 +119,9 @@ class EasyBlob(object):
         return self.git.get_blob(self.git_id).data
 
     def set_data(self, value):
-        assert self._git_blob is not None
+        if self._git_blob is None:
+            with self:
+                return self.set_data(value)
         self._git_blob.data = value
 
     data = property(get_data, set_data)
