@@ -4,102 +4,56 @@ import logging
 import binascii
 from cStringIO import StringIO
 
-import dulwich
+import easygit
 
 log = logging.getLogger('spaghettifs.storage')
 log.setLevel(logging.DEBUG)
 
 class GitStorage(object):
     def __init__(self, repo_path):
-        self.git = dulwich.repo.Repo(repo_path)
-        self.head = self.git.head()
-        self.commit_tree_id = self.git.commit(self.head).tree
-        log.debug('Loaded storage, head=%s', self.head)
+        self.eg = easygit.EasyGit.open_repo(repo_path)
+        log.debug('Loaded storage')
 
     def get_root(self):
-        commit_tree = self.git.tree(self.commit_tree_id)
-        root_ls_id = commit_tree['root.ls'][1]
-        root_sub_id = commit_tree['root.sub'][1]
-        root = StorageDir('root', root_ls_id, root_sub_id, self, self)
+        commit_tree = self.eg.root
+        root_ls = commit_tree['root.ls']
+        root_sub = commit_tree['root.sub']
+        root = StorageDir('root', root_ls, root_sub, '/', self, None)
         root.path = '/'
         return root
 
     def get_inode(self, name):
-        commit_tree = self.git.tree(self.commit_tree_id)
-        inode_tree = self.git.tree(commit_tree['inodes'][1])
-        inode_id = inode_tree[name][1]
-        return StorageInode(name, inode_id, self)
+        inode_tree = self.eg.root['inodes'][name]
+        return StorageInode(name, inode_tree, self)
 
     def create_inode(self):
-        inodes_id = self.git.tree(self.commit_tree_id)['inodes'][1]
-        inodes = self.git.tree(inodes_id)
+        inodes = self.eg.root['inodes']
         # TODO: find a better way to choose the inode number
-        last_inode_number = max(int(i[0][1:]) for i in inodes.iteritems())
+        last_inode_number = max(int(name[1:]) for name in inodes)
         inode_name = 'i' + str(last_inode_number + 1)
-
-        inode_contents = dulwich.objects.Tree()
-        self.git.object_store.add_object(inode_contents)
-
-        inodes[inode_name] = (040000, inode_contents.id)
-        self.git.object_store.add_object(inodes)
-
-        self.update_sub('inodes', (040000, inodes.id))
-
+        inodes.new_tree(inode_name)
         return self.get_inode(inode_name)
 
-    def update_inode(self, inode_name, inode_contents_id):
-        inodes_id = self.git.tree(self.commit_tree_id)['inodes'][1]
-        inodes = self.git.tree(inodes_id)
-        if inode_contents_id is None:
-            del inodes[inode_name]
-        else:
-            inodes[inode_name] = (040000, inode_contents_id)
-        self.git.object_store.add_object(inodes)
-        self.update_sub('inodes', (040000, inodes.id))
+    def commit(self):
+        log.info('Committing')
 
-    def update_sub(self, name, value):
-        assert ((name == 'root.ls' and value[0] == 0100644) or
-                (name == 'root.sub' and value[0] == 040000) or
-                (name == 'inodes' and value[0] == 040000))
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="Auto commit")
 
-        commit_tree = self.git.tree(self.commit_tree_id)
-        commit_tree[name] = value
-
-        commit = dulwich.objects.Commit()
-        commit.tree = commit_tree.id
-        commit.author = commit.committer = "Spaghetti User <noreply@grep.ro>"
-        commit.commit_time = commit.author_time = int(time())
-        commit.commit_timezone = commit.author_timezone = 2*60*60
-        commit.encoding = "UTF-8"
-        commit.message = "Auto commit"
-        commit.set_parents([self.git.head()])
-
-        log.info('Committing %s', commit_tree.id)
-
-        self.git.object_store.add_object(commit_tree)
-        self.git.object_store.add_object(commit)
-        self.commit_tree_id = commit_tree.id
-        self.git.refs['refs/heads/master'] = commit.id
-
-class StorageDir(UserDict.DictMixin):
+class StorageDir(object, UserDict.DictMixin):
     is_dir = True
 
-    def __init__(self, name, ls_id, sub_id, storage, parent):
+    def __init__(self, name, ls_blob, sub_tree, path, storage, parent):
         self.name = name
-        self.ls_id = ls_id # ID of blob that lists our contents
-        self.sub_id = sub_id # ID of tree that keeps our subfolders
+        self.ls_blob = ls_blob # blob that lists our contents
+        self.sub_tree = sub_tree # tree that keeps our subfolders
+        self.path = path
         self.storage = storage
         self.parent = parent
-        log.debug('Loaded folder %s, ls_id=%s, sub_id=%s',
-                  repr(name), ls_id, sub_id)
-
-    @property
-    def path(self):
-        return self.parent.path + self.name + '/'
+        log.debug('Loaded folder %r', name)
 
     def _iter_contents(self):
-        ls_data = self.storage.git.get_blob(self.ls_id).data
-        for line in ls_data.split('\n'):
+        for line in self.ls_blob.data.split('\n'):
             if not line:
                 continue
             try:
@@ -117,13 +71,15 @@ class StorageDir(UserDict.DictMixin):
         for name, value in self._iter_contents():
             if key == name:
                 if value == '/':
-                    sub = self.storage.git.tree(self.sub_id)
-                    child_ls_id = sub[quote(name) + '.ls'][1]
+                    qname = quote(name)
+                    child_ls = self.sub_tree[qname + '.ls']
                     try:
-                        child_sub_id = sub[quote(name) + '.sub'][1]
+                        child_sub = self.sub_tree[qname + '.sub']
                     except KeyError:
-                        child_sub_id = None
-                    return StorageDir(name, child_ls_id, child_sub_id,
+                        child_sub = self.sub_tree.new_tree(qname + '.sub')
+                        self.storage.commit()
+                    return StorageDir(name, child_ls, child_sub,
+                                      self.path + name + '/',
                                       self.storage, self)
                 else:
                     inode = self.storage.get_inode(value)
@@ -133,128 +89,106 @@ class StorageDir(UserDict.DictMixin):
 
     def create_file(self, name):
         check_filename(name)
+        log.info('Creating file %s in %s', repr(name), repr(self.path))
+
         inode = self.storage.create_inode()
-        ls_blob = self.storage.git.get_blob(self.ls_id)
-        ls_blob.data += "%s %s\n" % (quote(name), inode.name)
-        self.storage.git.object_store.add_object(ls_blob)
-        self.ls_id = ls_blob.id
-        self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
+        with self.ls_blob as b:
+            b.data += "%s %s\n" % (quote(name), inode.name)
+
+        self.storage.commit()
+
         return self[name]
 
     def create_directory(self, name):
         check_filename(name)
         log.info('Creating directory %s in %s', repr(name), repr(self.path))
 
-        child_ls_blob = dulwich.objects.Blob.from_string('')
-        self.storage.git.object_store.add_object(child_ls_blob)
-        self.update_sub(name + '.ls', (0100644, child_ls_blob.id))
+        qname = quote(name)
+        with self.sub_tree as st:
+            child_ls_blob = st.new_blob(qname + '.ls')
+        with self.ls_blob as b:
+            b.data += "%s /\n" % qname
 
-        ls_blob = self.storage.git.get_blob(self.ls_id)
-        ls_blob.data += "%s /\n" % quote(name)
-        self.storage.git.object_store.add_object(ls_blob)
-        self.ls_id = ls_blob.id
-        self.parent.update_sub(self.name + '.ls', (0100644, self.ls_id))
+        self.storage.commit()
 
         return self[name]
 
-    def update_sub(self, name, value):
-        assert ((name.endswith('.ls') and value[0] == 0100644) or
-                (name.endswith('.sub') and value[0] == 040000))
-        log.info('Updating record %s in %s, value=%s',
-                 name, repr(self.path), value)
-        if self.sub_id is None:
-            sub = dulwich.objects.Tree()
-        else:
-            sub = self.storage.git.tree(self.sub_id)
-        if value[1] is None:
-            del sub[quote(name)]
-        else:
-            sub[quote(name)] = value
-        self.sub_id = sub.id
-        self.storage.git.object_store.add_object(sub)
-        self.parent.update_sub(self.name + '.sub',
-                               (040000, self.sub_id))
-
     def remove_ls_entry(self, rm_name):
         ls_data = ''
+        removed_count = 0
         for name, value in self._iter_contents():
             if name == rm_name:
                 log.debug('Removing ls entry %s from %s',
                           repr(rm_name), repr(self.path))
+                removed_count += 1
             else:
                 ls_data += '%s %s\n' % (quote(name), value)
-        ls_blob = dulwich.objects.Blob.from_string(ls_data)
-        self.storage.git.object_store.add_object(ls_blob)
-        self.ls_id = ls_blob.id
-        self.parent.update_sub(self.name + '.ls',
-                               (0100644, self.ls_id))
+        assert removed_count == 1
+
+        with self.ls_blob as b:
+            b.data = ls_data
+
+        self.storage.commit()
 
     def unlink(self):
         log.info('Removing folder %s', repr(self.path))
-        self.parent.update_sub(self.name + '.ls', (0100644, None))
-        if self.sub_id is not None:
-            self.parent.update_sub(self.name + '.sub', (040000, None))
+
+        self.ls_blob.remove()
+        self.sub_tree.remove()
         self.parent.remove_ls_entry(self.name)
+
+        self.storage.commit()
 
 class StorageInode(object):
     blocksize = 64*1024 # 64 KB
 
-    def __init__(self, name, tree_id, storage):
+    def __init__(self, name, tree, storage):
         self.name = name
-        self.tree_id = tree_id
+        self.tree = tree
         self.storage = storage
-        log.debug('Loaded inode %s, tree_id=%s', repr(name), tree_id)
+        log.debug('Loaded inode %r', name)
 
     def read_block(self, n):
         block_name = 'b%d' % (n * self.blocksize)
+        log.debug('Reading block %r of inode %r', block_name, self.name)
         try:
-            block_id = self.storage.git.tree(self.tree_id)[block_name][1]
+            block = self.tree[block_name]
         except KeyError:
-            # TODO: raise exception
             return ''
-
-        log.debug('Reading block %r of inode %r: %r',
-                  block_name, self.name, block_id)
-        return self.storage.git.get_blob(block_id).data
+        else:
+            return block.data
 
     def write_block(self, n, data):
         block_name = 'b%d' % (n * self.blocksize)
-        block_blob = dulwich.objects.Blob.from_string(data)
-        block_id = block_blob.id
+        log.debug('Writing block %r of inode %r', block_name, self.name)
+        if block_name in self.tree:
+            block = self.tree[block_name]
+        else:
+            block = self.tree.new_blob(block_name)
+        block.data = data
 
-        log.debug('Writing block %r of inode %r: %r',
-                  block_name, self.name, block_id)
-        tree = self.storage.git.tree(self.tree_id)
-        tree[block_name] = (0100644, block_id)
-        self.storage.git.object_store.add_object(block_blob)
-        self.storage.git.object_store.add_object(tree)
-        self.tree_id = tree.id
-        self.storage.update_inode(self.name, self.tree_id)
+        self.storage.commit()
 
     def delete_block(self, n):
         block_name = 'b%d' % (n * self.blocksize)
         log.debug('Removing block %r of inode %r', block_name, self.name)
-        tree = self.storage.git.tree(self.tree_id)
-        del tree[block_name]
-        self.storage.git.object_store.add_object(tree)
-        self.tree_id = tree.id
-        self.storage.update_inode(self.name, self.tree_id)
+        del self.tree[block_name]
+
+        self.storage.commit()
 
     def get_size(self):
-        block_tree = self.storage.git.tree(self.tree_id)
-
         last_block_offset = None
-        for entry in block_tree.iteritems():
-            block_offset = int(entry[0][1:])
+        for block_name in self.tree:
+            block_offset = int(block_name[1:])
             if block_offset > last_block_offset:
                 last_block_offset = block_offset
-                last_block_id = entry[2]
+                last_block_name = block_name
 
         if last_block_offset is None:
             return 0
         else:
-            last_block_blob = self.storage.git.get_blob(last_block_id)
-            return last_block_offset + len(last_block_blob.data)
+            last_block = self.tree[last_block_name]
+            return last_block_offset + len(last_block.data)
 
     def read_data(self, offset, length):
         end = offset + length
@@ -342,7 +276,8 @@ class StorageInode(object):
 
     def unlink(self):
         log.info('Unlinking inode %s', repr(self.name))
-        self.storage.update_inode(self.name, None)
+        self.tree.remove()
+        self.storage.commit()
 
 class StorageFile(object):
     is_dir = False
