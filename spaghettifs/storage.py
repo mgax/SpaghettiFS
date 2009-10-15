@@ -38,7 +38,8 @@ class GitStorage(object):
         log.info('Committing')
 
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="Auto commit")
+                       message="Auto commit",
+                       parents=[self.eg.get_head_id()])
 
 class StorageDir(object, UserDict.DictMixin):
     is_dir = True
