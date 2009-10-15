@@ -1,19 +1,11 @@
 from os import path
 import unittest
-from cStringIO import StringIO
 import random
-import struct
 
 import dulwich
 
-from support import SpaghettiTestCase, setup_logger
+from support import SpaghettiTestCase, setup_logger, randomdata
 from spaghettifs.storage import GitStorage
-
-def randomdata(size):
-    f = StringIO()
-    for c in xrange(size / 8 + 1):
-        f.write(struct.pack('Q', random.getrandbits(64)))
-    return f.getvalue()[:size]
 
 class BackendTestCase(SpaghettiTestCase):
     def test_walk(self):

@@ -3,6 +3,9 @@ import tempfile
 import shutil
 from os import path
 import logging
+import random
+import struct
+from cStringIO import StringIO
 
 from spaghettifs.storage import GitStorage
 
@@ -21,6 +24,12 @@ class SpaghettiTestCase(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
+
+def randomdata(size):
+    f = StringIO()
+    for c in xrange(size / 8 + 1):
+        f.write(struct.pack('Q', random.getrandbits(64)))
+    return f.getvalue()[:size]
 
 def setup_logger(log_level):
     import logging
