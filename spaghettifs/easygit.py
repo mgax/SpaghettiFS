@@ -150,7 +150,10 @@ class EasyGit(object):
 
         self.root = EasyTree(self.git, root_id, None, '[ROOT]')
 
-    def commit(self, author, message):
+    def commit(self, author, message, parents=[]):
+        for parent_id in parents:
+            assert self.git.commit(parent_id)
+
         commit_time = int(time())
 
         git_commit = dulwich.objects.Commit()
@@ -163,9 +166,13 @@ class EasyGit(object):
         git_commit.message = message
         git_commit.encoding = "UTF-8"
         git_commit.tree = self.root.git_id
+        git_commit.parents = parents
 
         self.git.object_store.add_object(git_commit)
         self.git.refs['refs/heads/master'] = git_commit.id
+
+    def get_head_id(self):
+        return self.git.head()
 
     @classmethod
     def new_repo(cls, repo_path, bare=False):

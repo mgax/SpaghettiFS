@@ -30,6 +30,28 @@ class BasicTestCase(unittest.TestCase):
         self.assertEqual(git_c.message, "initial test commit")
         self.assertEqual(git_c.get_parents(), [])
 
+    def test_commit_with_ancestors(self):
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="initial test commit")
+
+        head_id = self.eg.get_head_id()
+
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="second test commit",
+                       parents=[head_id])
+
+        self.assertRaises(AssertionError, self.eg.commit,
+                          author="Sneaky <noreply@grep.ro>",
+                          message="bad test commit",
+                          parents=['asdf'])
+
+        git = dulwich.repo.Repo(self.repo_path)
+        git_h = git.head()
+        git_c2 = git.commit(git_h)
+        self.assertEqual(len(git_c2.get_parents()), 1)
+        git_c1 = git.commit(git_c2.get_parents()[0])
+        self.assertEqual(git_c1.get_parents(), [])
+
     def test_commit_with_tree(self):
         t1 = self.eg.root
         t2 = t1.new_tree('t2')
