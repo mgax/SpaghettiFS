@@ -1,4 +1,5 @@
 from time import time
+import weakref
 
 import dulwich
 
@@ -15,6 +16,7 @@ class EasyTree(object):
         self.parent = parent
         self.name = name
         self._ctx_count = 0
+        self._loaded = dict()
 
     def _set(self, name, value):
         if self._git_tree is None:
@@ -23,24 +25,27 @@ class EasyTree(object):
 
         if value is None:
             del self._git_tree[name]
+
         elif isinstance(value, EasyTree):
             assert value._git_tree is None
             self._git_tree[name] = (040000, value.git_id)
+
         elif isinstance(value, EasyBlob):
             assert value._git_blob is None
             self._git_tree[name] = (0100644, value.git_id)
+
         else:
             assert False
 
     def new_tree(self, name):
         t = EasyTree(self.git, None, self, name)
         self._set(name, t)
-        return t
+        return self[name]
 
     def new_blob(self, name):
         b = EasyBlob(self.git, None, self, name)
         self._set(name, b)
-        return b
+        return self[name]
 
     def __enter__(self):
         if self._git_tree is None:
@@ -65,21 +70,35 @@ class EasyTree(object):
                 p._set(self.name, self)
 
     def __getitem__(self, name):
-        mode, child_git_id = self.git.tree(self.git_id)[name]
+        if name in self._loaded:
+            value = self._loaded[name]()
+            if value is None:
+                del self._loaded[name]
+            else:
+                return value
+
+        if self._git_tree is None:
+            with self:
+                return self[name]
+
+        mode, child_git_id = self._git_tree[name]
         if mode == 040000:
-            return EasyTree(self.git, child_git_id, self, name)
+            value = EasyTree(self.git, child_git_id, self, name)
         elif mode == 0100644:
-            return EasyBlob(self.git, child_git_id, self, name)
+            value = EasyBlob(self.git, child_git_id, self, name)
         else:
             raise ValueError('Unexpected mode %r' % mode)
+
+        self._loaded[name] = weakref.ref(value)
+        return value
 
     def __delitem__(self, name):
         self._set(name, None)
 
     def __iter__(self):
-        git_tree = self.git.tree(self.git_id)
-        for name, mode, child_git_id in git_tree.iteritems():
-            yield name
+        with self:
+            for name, mode, child_git_id in self._git_tree.iteritems():
+                yield name
 
     def keys(self):
         return [name for name in self]
@@ -104,7 +123,7 @@ class EasyBlob(object):
     def __enter__(self):
         if self._git_blob is None:
             assert self._ctx_count == 0
-            self._git_blob = dulwich.objects.Blob.from_string('')
+            self._git_blob = self.git.get_blob(self.git_id)
         self._ctx_count += 1
         return self
 
@@ -124,7 +143,10 @@ class EasyBlob(object):
                 p._set(self.name, self)
 
     def _get_data(self):
-        return self.git.get_blob(self.git_id).data
+        if self._git_blob is None:
+            with self:
+                return self._get_data()
+        return self._git_blob.data
 
     def _set_data(self, value):
         if self._git_blob is None:

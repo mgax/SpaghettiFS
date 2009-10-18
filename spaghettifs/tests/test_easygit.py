@@ -129,6 +129,8 @@ class RetrievalTestCase(unittest.TestCase):
             b3 = t2.new_blob('b3')
             with b3:
                 b3.data = 'asdf'
+            self.assertEqual(set(t2.keys()), set(['b2', 'b3']))
+            self.assertEqual(t2['b3'].data, 'asdf')
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
                        message="propagating changes")
 
@@ -139,6 +141,11 @@ class RetrievalTestCase(unittest.TestCase):
         t1 = self.eg.root
         with t1['t2']['b2'] as b2:
             b2.data = 'qwer'
+            self.assertEqual(b2.data, 'qwer')
+
+        with t1['t2']['b2'] as b2:
+            self.assertEqual(b2.data, 'qwer')
+
         self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
                        message="propagating changes")
 
@@ -170,6 +177,28 @@ class RetrievalTestCase(unittest.TestCase):
         self.assertEqual(set(root2['t4'].keys()), set(['b5']))
         self.assertEqual(root2['t4']['b5'].data, 'new b5')
         self.assertEqual(root2['b6'].data, 'new b6')
+
+    def test_child_cache(self):
+        root = self.eg.root
+
+        t2a = root['t2']
+        t2b = root['t2']
+        self.assertTrue(t2a is t2b)
+
+        t2a['b2'].data = 'asdf'
+        self.assertEqual(t2b['b2'].data, 'asdf')
+
+        b3a = t2a.new_blob('b3')
+        b3a.data = 'b3 data'
+        b3b = t2b['b3']
+        self.assertTrue(b3a is b3b)
+        self.assertEqual(b3b.data, 'b3 data')
+
+        t3a = t2a.new_tree('t3')
+        t3a.new_blob('b4')
+        t3b = t2b['t3']
+        self.assertTrue(t3a is t3b)
+        self.assertEqual(set(t3b.keys()), set(['b4']))
 
     def test_remove_entry(self):
         with self.eg.root as t1:
