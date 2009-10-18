@@ -1,163 +1,182 @@
 from time import time
 import weakref
+import logging
 
 import dulwich
 
-class EasyTree(object):
-    _git_tree = None
+log = logging.getLogger('spaghettifs.easygit')
+log.setLevel(logging.DEBUG)
 
+class EasyTree(object):
     def __init__(self, git_repo, git_id=None, parent=None, name=None):
+        self.parent = parent
+        self.name = name
         self.git = git_repo
         if git_id is None:
+            log.debug('tree %r: creating blank git tree', self.name)
             git_tree = dulwich.objects.Tree()
             self.git.object_store.add_object(git_tree)
             git_id = git_tree.id
-        self.git_id = git_id
-        self.parent = parent
-        self.name = name
+        log.debug('tree %r: loading git tree %r', self.name, git_id)
+        self._git_tree = self.git.tree(git_id)
         self._ctx_count = 0
         self._loaded = dict()
+        self._dirty = dict()
 
-    def _set(self, name, value):
-        if self._git_tree is None:
-            with self:
-                return self._set(name, value)
-
-        if value is None:
-            del self._git_tree[name]
-
-        elif isinstance(value, EasyTree):
-            assert value._git_tree is None
-            self._git_tree[name] = (040000, value.git_id)
-
-        elif isinstance(value, EasyBlob):
-            assert value._git_blob is None
-            self._git_tree[name] = (0100644, value.git_id)
-
-        else:
-            assert False
+    def _set_dirty(self, name, value):
+        log.debug('tree %r: setting dirty entry %r (%r)',
+                  self.name, name, value)
+        if self.parent and not self._dirty:
+            log.debug('tree %r: propagating "dirty" state', self.name)
+            self.parent._set_dirty(self.name, self)
+        self._dirty[name] = value
 
     def new_tree(self, name):
+        log.debug('tree %r: creating child tree %r', self.name, name)
         t = EasyTree(self.git, None, self, name)
-        self._set(name, t)
+        self._set_dirty(name, t)
         return self[name]
 
     def new_blob(self, name):
+        log.debug('tree %r: creating child blob %r', self.name, name)
         b = EasyBlob(self.git, None, self, name)
-        self._set(name, b)
+        self._set_dirty(name, b)
         return self[name]
 
     def __enter__(self):
-        if self._git_tree is None:
-            assert self._ctx_count == 0
-            self._git_tree = self.git.tree(self.git_id)
         self._ctx_count += 1
+        log.debug('tree %r: entering context manager (count=%d)',
+                  self.name, self._ctx_count)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        log.debug('tree %r: exiting context manager (count=%d)',
+                  self.name, self._ctx_count)
         assert self._ctx_count > 0
-        assert self._git_tree is not None
         self._ctx_count -= 1
-        if self._ctx_count > 0:
-            return
+
+    def _commit(self):
+        log.debug('tree %r: committing', self.name)
+        assert self._ctx_count == 0
+
+        for name, value in self._dirty.iteritems():
+            if value is None:
+                log.debug('tree %r: removing entry %r', self.name, name)
+                del self._git_tree[name]
+                continue
+
+            value_git_id = value._commit()
+            if isinstance(value, EasyTree):
+                log.debug('tree %r: updating tree %r', self.name, name)
+                self._git_tree[name] = (040000, value_git_id)
+            elif isinstance(value, EasyBlob):
+                log.debug('tree %r: updating blob %r', self.name, name)
+                self._git_tree[name] = (0100644, value_git_id)
+            else:
+                assert False
+
+        self._dirty.clear()
 
         self.git.object_store.add_object(self._git_tree)
-        self.git_id = self._git_tree.id
-        del self._git_tree
-
-        if self.parent is not None:
-            with self.parent as p:
-                p._set(self.name, self)
+        git_id = self._git_tree.id
+        log.debug('tree %r: finished commit, id=%r', self.name, git_id)
+        return git_id
 
     def __getitem__(self, name):
         if name in self._loaded:
             value = self._loaded[name]()
             if value is None:
+                log.debug('tree %r: weakref to %r has expired',
+                          self.name, name)
                 del self._loaded[name]
             else:
+                log.debug('tree %r: returning %r from cache',
+                          self.name, name)
                 return value
 
-        if self._git_tree is None:
-            with self:
-                return self[name]
+        if name in self._dirty:
+            value = self._dirty[name]
+            if value is None:
+                raise KeyError(name)
+            log.debug('tree %r: returning %r from dirty', self.name, name)
 
-        mode, child_git_id = self._git_tree[name]
-        if mode == 040000:
-            value = EasyTree(self.git, child_git_id, self, name)
-        elif mode == 0100644:
-            value = EasyBlob(self.git, child_git_id, self, name)
         else:
-            raise ValueError('Unexpected mode %r' % mode)
+            mode, child_git_id = self._git_tree[name]
+            if mode == 040000:
+                log.debug('tree %r: loading child tree %r', self.name, name)
+                value = EasyTree(self.git, child_git_id, self, name)
+            elif mode == 0100644:
+                log.debug('tree %r: loading child blob %r', self.name, name)
+                value = EasyBlob(self.git, child_git_id, self, name)
+            else:
+                raise ValueError('Unexpected mode %r' % mode)
 
         self._loaded[name] = weakref.ref(value)
         return value
 
     def __delitem__(self, name):
-        self._set(name, None)
+        self._set_dirty(name, None)
+        if name in self._loaded:
+            del self._loaded[name]
 
     def __iter__(self):
-        with self:
-            for name, mode, child_git_id in self._git_tree.iteritems():
-                yield name
+        for name in self.keys():
+            yield name
 
     def keys(self):
-        return [name for name in self]
+        names = set(name for name, e0, e1 in self._git_tree.iteritems())
+        names.update(set(self._dirty.iterkeys()))
+        for name, value in self._dirty.iteritems():
+            if value is None:
+                names.remove(name)
+
+        return list(names)
 
     def remove(self):
         del self.parent[self.name]
 
 class EasyBlob(object):
-    _git_blob = None
-
     def __init__(self, git_repo, git_id=None, parent=None, name=None):
+        self.parent = parent
+        self.name = name
         self.git = git_repo
         if git_id is None:
+            log.debug('blob %r: creating blank git blob', self.name)
             git_blob = dulwich.objects.Blob.from_string('')
             self.git.object_store.add_object(git_blob)
             git_id = git_blob.id
-        self.git_id = git_id
-        self.parent = parent
-        self.name = name
+        log.debug('blob %r: loading git blob %r', self.name, git_id)
+        self._git_blob = self.git.get_blob(git_id)
         self._ctx_count = 0
 
     def __enter__(self):
-        if self._git_blob is None:
-            assert self._ctx_count == 0
-            self._git_blob = self.git.get_blob(self.git_id)
         self._ctx_count += 1
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         assert self._ctx_count > 0
-        assert self._git_blob is not None
         self._ctx_count -= 1
-        if self._ctx_count > 0:
-            return
-
-        self.git.object_store.add_object(self._git_blob)
-        self.git_id = self._git_blob.id
-        del self._git_blob
-
-        if self.parent is not None:
-            with self.parent as p:
-                p._set(self.name, self)
 
     def _get_data(self):
-        if self._git_blob is None:
-            with self:
-                return self._get_data()
         return self._git_blob.data
 
     def _set_data(self, value):
-        if self._git_blob is None:
-            with self:
-                return self._set_data(value)
-        self._git_blob.data = value
+        log.debug('blob %r: updating value', self.name)
+        self._git_blob = dulwich.objects.Blob.from_string(value)
+        self.parent._set_dirty(self.name, self)
 
     data = property(_get_data, _set_data)
 
     def remove(self):
         del self.parent[self.name]
+
+    def _commit(self):
+        assert self._ctx_count == 0
+
+        self.git.object_store.add_object(self._git_blob)
+        git_id = self._git_blob.id
+        log.debug('blob %r: finished commit, id=%r', self.name, git_id)
+        return git_id
 
 class EasyGit(object):
     def __init__(self, git_repo):
@@ -173,8 +192,11 @@ class EasyGit(object):
         self.root = EasyTree(self.git, root_id, None, '[ROOT]')
 
     def commit(self, author, message, parents=[]):
+        log.debug('easygit repo: starting commit')
         for parent_id in parents:
             assert self.git.commit(parent_id)
+
+        root_git_id = self.root._commit()
 
         commit_time = int(time())
 
@@ -187,22 +209,25 @@ class EasyGit(object):
         git_commit.committer = author
         git_commit.message = message
         git_commit.encoding = "UTF-8"
-        git_commit.tree = self.root.git_id
+        git_commit.tree = root_git_id
         git_commit.parents = parents
 
         self.git.object_store.add_object(git_commit)
         self.git.refs['refs/heads/master'] = git_commit.id
+        log.debug('easygit repo: finished commit, id=%r', git_commit.id)
 
     def get_head_id(self):
         return self.git.head()
 
     @classmethod
     def new_repo(cls, repo_path, bare=False):
+        log.debug('easygit creating repository at %r', repo_path)
         assert bare is True
         git_repo = dulwich.repo.Repo.init_bare(repo_path)
         return cls(git_repo)
 
     @classmethod
     def open_repo(cls, repo_path):
+        log.debug('easygit opening repository at %r', repo_path)
         git_repo = dulwich.repo.Repo(repo_path)
         return cls(git_repo)

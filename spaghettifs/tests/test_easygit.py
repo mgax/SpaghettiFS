@@ -5,6 +5,7 @@ import os
 from time import time
 
 import dulwich
+from support import setup_logger
 from spaghettifs.easygit import EasyGit
 
 class BasicTestCase(unittest.TestCase):
@@ -140,6 +141,7 @@ class RetrievalTestCase(unittest.TestCase):
     def test_modify_blob(self):
         t1 = self.eg.root
         with t1['t2']['b2'] as b2:
+            self.assertNotEqual(b2.data, 'qwer')
             b2.data = 'qwer'
             self.assertEqual(b2.data, 'qwer')
 
@@ -224,6 +226,12 @@ class RetrievalTestCase(unittest.TestCase):
         eg2 = EasyGit.open_repo(self.repo_path)
         self.assertEqual(eg2.root.keys(), [])
 
+    def test_remove_and_fetch_entry(self):
+        t1 = self.eg.root
+        t2 = t1['t2']
+        t1['t2'].remove()
+        self.assertRaises(KeyError, t1.__getitem__, 't2')
+
 class ContextTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()
@@ -260,4 +268,5 @@ class ContextTestCase(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    setup_logger('ERROR')
     unittest.main()
