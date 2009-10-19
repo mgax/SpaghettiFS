@@ -9,25 +9,31 @@ from support import SpaghettiTestCase
 from spaghettifs.filesystem import repr_log
 
 class FuseMountTestCase(SpaghettiTestCase):
+    script_tmpl = "from spaghettifs.filesystem import mount; mount(%s, %s)"
+
     def setUp(self):
         super(FuseMountTestCase, self).setUp()
         self.mount_point = path.join(self.tmpdir, 'mnt')
         os.mkdir(self.mount_point)
-        script = ("from spaghettifs.filesystem import mount; "
-                  "mount(%s, %s)" % (repr(self.repo_path),
-                                     repr(self.mount_point)))
+        script = self.script_tmpl % (repr(self.repo_path),
+                                     repr(self.mount_point))
         self.fsmount = subprocess.Popen([sys.executable, '-c', script],
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT)
-        time.sleep(.3) # wait for mount operation to complete
+        # wait for mount operation to complete
+        for c in xrange(20):
+            if path.ismount(self.mount_point):
+                break
+            time.sleep(.1)
+        else:
+            raise AssertionError('Filesystem did not mount after 2 seconds')
 
     def tearDown(self):
         msg = subprocess.Popen(['umount', path.realpath(self.mount_point)],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT
                               ).communicate()[0]
-        msg = self.fsmount.communicate()[0]
-        #print msg
+        self._output = self.fsmount.communicate()[0]
         super(FuseMountTestCase, self).tearDown()
 
     def test_listing(self):
