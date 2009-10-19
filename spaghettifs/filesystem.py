@@ -4,6 +4,7 @@ from stat import S_IFDIR, S_IFREG
 from time import time
 import logging
 from datetime import datetime
+import threading
 
 from fuse import FUSE, Operations
 from storage import GitStorage
@@ -17,6 +18,9 @@ class SpaghettiFS(Operations):
     def __init__(self, repo):
         self.repo = repo
         self._write_count = 0
+        # the FUSE library seems to assume we're thread-safe, so we use a
+        # big fat lock, just in case
+        self._lock = threading.Lock()
 
     def get_obj(self, path):
         #assert(path.startswith('/'))
@@ -117,6 +121,7 @@ class SpaghettiFS(Operations):
         log.debug('FUSE api call: %r %r %r',
                   op, path, tuple(LogWrap(arg) for arg in args))
         ret = '[Unknown Error]'
+        self._lock.acquire()
         try:
             ret = super(SpaghettiFS, self).__call__(op, path, *args)
             return ret
@@ -124,6 +129,7 @@ class SpaghettiFS(Operations):
             ret = str(e)
             raise
         finally:
+            self._lock.release()
             log.debug('FUSE api return: %r %r', op, LogWrap(ret))
 
 class LogWrap(object):
