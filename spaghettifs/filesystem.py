@@ -3,6 +3,7 @@ from errno import ENOENT
 from stat import S_IFDIR, S_IFREG
 from time import time
 import logging
+from datetime import datetime
 
 from fuse import FUSE, Operations
 from storage import GitStorage
@@ -10,9 +11,12 @@ from storage import GitStorage
 log = logging.getLogger('spaghettifs.filesystem')
 log.setLevel(logging.DEBUG)
 
+WRITE_BUFFER_SIZE = 3 * 1024 * 1024 # 3MB
+
 class SpaghettiFS(Operations):
     def __init__(self, repo):
         self.repo = repo
+        self._write_count = 0
 
     def get_obj(self, path):
         #assert(path.startswith('/'))
@@ -91,6 +95,12 @@ class SpaghettiFS(Operations):
 
         obj.write_data(data, offset)
 
+        if not self.repo.autocommit:
+            self._write_count += len(data)
+            if self._write_count > WRITE_BUFFER_SIZE:
+                self.repo.commit(amend=True)
+                self._write_count = 0
+
         return len(data)
 
 #    access = None
@@ -130,11 +140,31 @@ class LogWrap(object):
     def __str__(self):
         return repr(self)
 
-def mount(repo_path, mount_path, default_logging=logging.ERROR):
-    if default_logging is not None:
+datefmt = lambda dt: dt.strftime('%Y-%m-%d %H:%M:%S')
+
+class _open_fs(object):
+    def __init__(self, repo_path, cls):
+        self.repo_path = repo_path
+        self.cls = cls
+
+    def __enter__(self):
+        self.time_mount = datetime.now()
+        self.repo = GitStorage(self.repo_path, autocommit=False)
+        self.repo.commit("[temporary commit; currently mounted, since %s]" %
+                         datefmt(self.time_mount))
+        return self.cls(self.repo)
+
+    def __exit__(self, e0, e1, e2):
+        self.time_unmount = datetime.now()
+        msg = ("Mounted operations:\n  mounted at %s\n  unmounted at %s\n" %
+               (datefmt(self.time_mount), datefmt(self.time_unmount)))
+        self.repo.commit(msg, amend=True)
+
+def mount(repo_path, mount_path, cls=SpaghettiFS, loglevel=logging.ERROR):
+    if loglevel is not None:
         stderr_handler = logging.StreamHandler()
-        stderr_handler.setLevel(default_logging)
+        stderr_handler.setLevel(loglevel)
         logging.getLogger('spaghettifs').addHandler(stderr_handler)
 
-    fs = SpaghettiFS(GitStorage(repo_path))
-    return FUSE(fs, mount_path, foreground=True)
+    with _open_fs(repo_path, cls) as fs:
+        FUSE(fs, mount_path, foreground=True)

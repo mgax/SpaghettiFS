@@ -10,9 +10,11 @@ log = logging.getLogger('spaghettifs.storage')
 log.setLevel(logging.DEBUG)
 
 class GitStorage(object):
-    def __init__(self, repo_path):
+    def __init__(self, repo_path, autocommit=True):
         self.eg = easygit.EasyGit.open_repo(repo_path)
-        log.debug('Loaded storage')
+        self.autocommit = autocommit
+        log.debug('Loaded storage, autocommit=%r, HEAD=%r',
+                  autocommit, self.eg.get_head_id())
 
     def get_root(self):
         commit_tree = self.eg.root
@@ -34,12 +36,27 @@ class GitStorage(object):
         inodes.new_tree(inode_name)
         return self.get_inode(inode_name)
 
-    def commit(self):
+    def _autocommit(self):
+        if self.autocommit:
+            self.commit("Auto commit")
+
+    def commit(self, message=None, amend=False):
         log.info('Committing')
 
-        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
-                       message="Auto commit",
-                       parents=[self.eg.get_head_id()])
+        head_id = self.eg.get_head_id()
+        author = "Spaghetti User <noreply@grep.ro>"
+        if amend:
+            git = self.eg.git
+            prev_commit = git.commit(head_id)
+            parents = prev_commit.parents
+            if message is None:
+                message = prev_commit.message
+        else:
+            parents = [head_id]
+
+        assert message is not None
+
+        self.eg.commit(author, message, parents)
 
 class StorageDir(object, UserDict.DictMixin):
     is_dir = True
@@ -78,7 +95,7 @@ class StorageDir(object, UserDict.DictMixin):
                         child_sub = self.sub_tree[qname + '.sub']
                     except KeyError:
                         child_sub = self.sub_tree.new_tree(qname + '.sub')
-                        self.storage.commit()
+                        self.storage._autocommit()
                     return StorageDir(name, child_ls, child_sub,
                                       self.path + name + '/',
                                       self.storage, self)
@@ -96,7 +113,7 @@ class StorageDir(object, UserDict.DictMixin):
         with self.ls_blob as b:
             b.data += "%s %s\n" % (quote(name), inode.name)
 
-        self.storage.commit()
+        self.storage._autocommit()
 
         return self[name]
 
@@ -110,7 +127,7 @@ class StorageDir(object, UserDict.DictMixin):
         with self.ls_blob as b:
             b.data += "%s /\n" % qname
 
-        self.storage.commit()
+        self.storage._autocommit()
 
         return self[name]
 
@@ -129,7 +146,7 @@ class StorageDir(object, UserDict.DictMixin):
         with self.ls_blob as b:
             b.data = ls_data
 
-        self.storage.commit()
+        self.storage._autocommit()
 
     def unlink(self):
         log.info('Removing folder %s', repr(self.path))
@@ -138,10 +155,11 @@ class StorageDir(object, UserDict.DictMixin):
         self.sub_tree.remove()
         self.parent.remove_ls_entry(self.name)
 
-        self.storage.commit()
+        self.storage._autocommit()
 
 class StorageInode(object):
     blocksize = 64*1024 # 64 KB
+    #blocksize = 1024*1024 # 1024 KB
 
     def __init__(self, name, tree, storage):
         self.name = name
@@ -168,14 +186,14 @@ class StorageInode(object):
             block = self.tree.new_blob(block_name)
         block.data = data
 
-        self.storage.commit()
+        self.storage._autocommit()
 
     def delete_block(self, n):
         block_name = 'b%d' % (n * self.blocksize)
         log.debug('Removing block %r of inode %r', block_name, self.name)
         del self.tree[block_name]
 
-        self.storage.commit()
+        self.storage._autocommit()
 
     def get_size(self):
         last_block_offset = None
@@ -278,7 +296,7 @@ class StorageInode(object):
     def unlink(self):
         log.info('Unlinking inode %s', repr(self.name))
         self.tree.remove()
-        self.storage.commit()
+        self.storage._autocommit()
 
 class StorageFile(object):
     is_dir = False

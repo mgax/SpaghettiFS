@@ -327,4 +327,5 @@ class GitStructureTestCase(SpaghettiTestCase):
         assert_head_ancestor(repo, HEAD_1)
 
 if __name__ == '__main__':
+    setup_logger('ERROR')
     unittest.main()
