@@ -3,3 +3,7 @@
 from test_storage import *
 from test_filesystem import *
 from test_easygit import *
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

@@ -296,8 +296,7 @@ class StorageFile(object):
     def size(self):
         return self.inode.get_size()
 
-    @property
-    def data(self):
+    def _read_all_data(self):
         return self.read_data(0, self.inode.get_size())
 
     def read_data(self, offset, length):

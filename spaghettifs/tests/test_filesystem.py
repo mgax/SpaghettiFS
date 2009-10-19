@@ -70,20 +70,21 @@ class FuseMountTestCase(SpaghettiTestCase):
         f.flush()
         self.assertEqual(open(new_file_path).read(), 'something\0\0\0\0\0\0else')
 
-        test_data = randomdata(1024)
-        f.seek(0)
-        for c in xrange(1024):
-            if c == 700:
-                f.write(test_data)
-            else:
-                f.write('asdf' * 256)
-        f.flush()
-        f2 = open(new_file_path)
-        f2.seek(1024 * 700)
-        self.assertEqual(f2.read(1024), test_data)
-        f2.close()
-
+    def test_large_data(self):
+        _64K = 64*1024
+        _1M = 1024*1024
+        test_file_path = path.join(self.mount_point, 'newfile2')
+        test_data = randomdata(_1M)
+        f = open(test_file_path, 'wb')
+        for c in xrange(0, _1M, _64K):
+            f.write(test_data[c:c+_64K])
         f.close()
+
+        f2 = open(test_file_path, 'rb')
+        for c in xrange(0, _1M, _64K):
+            d = f2.read(_64K)
+            self.assertEqual(d, test_data[c:c+_64K])
+        f2.close()
 
     def test_unlink(self):
         new_file_path = path.join(self.mount_point, 'newfile')

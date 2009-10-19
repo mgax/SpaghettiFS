@@ -57,7 +57,7 @@ class SpaghettiFS(Operations):
         if obj is None or obj.is_dir:
             return ''
         else:
-            return obj.data
+            return obj.read_data(offset, size)
 
     def readdir(self, path, fh):
         obj = self.get_obj(path)

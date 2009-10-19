@@ -18,7 +18,7 @@ class BackendTestCase(SpaghettiTestCase):
         self.assertFalse(a_txt.is_dir)
         self.assertEqual(a_txt.name, 'a.txt')
         self.assertEqual(a_txt.size, 14)
-        self.assertEqual(a_txt.data, 'text file "a"\n')
+        self.assertEqual(a_txt._read_all_data(), 'text file "a"\n')
         self.assertEqual(a_txt.path, '/a.txt')
 
         b = root['b']
@@ -39,14 +39,14 @@ class BackendTestCase(SpaghettiTestCase):
         g_txt = b.create_file('g.txt')
         self.assertFalse(g_txt.is_dir)
         self.assertEqual(g_txt.size, 0)
-        self.assertEqual(g_txt.data, '')
+        self.assertEqual(g_txt._read_all_data(), '')
         self.assertEqual(g_txt.name, 'g.txt')
 
         repo2 = GitStorage(self.repo_path)
         g_txt_2 = repo2.get_root()['b']['g.txt']
         self.assertFalse(g_txt_2.is_dir)
         self.assertEqual(g_txt_2.size, 0)
-        self.assertEqual(g_txt_2.data, '')
+        self.assertEqual(g_txt_2._read_all_data(), '')
         self.assertEqual(g_txt_2.name, 'g.txt')
 
     def test_write_file_data(self):
@@ -54,33 +54,33 @@ class BackendTestCase(SpaghettiTestCase):
             repo2 = GitStorage(self.repo_path)
             h_txt_2 = repo2.get_root()['b']['h.txt']
             self.assertEqual(h_txt_2.size, len(data))
-            self.assertEqual(h_txt_2.data, data)
+            self.assertEqual(h_txt_2._read_all_data(), data)
 
         b = self.repo.get_root()['b']
         h_txt = b.create_file('h.txt')
         h_txt.write_data('hello git!', 0)
         self.assertEqual(h_txt.size, 10)
-        self.assertEqual(h_txt.data, 'hello git!')
+        self.assertEqual(h_txt._read_all_data(), 'hello git!')
         assert_git_contents('hello git!')
 
         h_txt.write_data(':)', 13)
         self.assertEqual(h_txt.size, 15)
-        self.assertEqual(h_txt.data, 'hello git!\0\0\0:)')
+        self.assertEqual(h_txt._read_all_data(), 'hello git!\0\0\0:)')
         assert_git_contents('hello git!\0\0\0:)')
 
         h_txt.truncate(17)
         self.assertEqual(h_txt.size, 17)
-        self.assertEqual(h_txt.data, 'hello git!\0\0\0:)\0\0')
+        self.assertEqual(h_txt._read_all_data(), 'hello git!\0\0\0:)\0\0')
         assert_git_contents('hello git!\0\0\0:)\0\0')
 
         h_txt.truncate(5)
         self.assertEqual(h_txt.size, 5)
-        self.assertEqual(h_txt.data, 'hello')
+        self.assertEqual(h_txt._read_all_data(), 'hello')
         assert_git_contents('hello')
 
         h_txt.write_data('-there', 5)
         self.assertEqual(h_txt.size, 11)
-        self.assertEqual(h_txt.data, 'hello-there')
+        self.assertEqual(h_txt._read_all_data(), 'hello-there')
         assert_git_contents('hello-there')
 
     def test_remove_file(self):
@@ -107,7 +107,7 @@ class BackendTestCase(SpaghettiTestCase):
         y = x.create_file('y')
         y.write_data('ydata', 0)
         self.assertEqual(set(x.keys()), set(['y']))
-        self.assertEqual(y.data, 'ydata')
+        self.assertEqual(y._read_all_data(), 'ydata')
 
         repo3 = GitStorage(self.repo_path)
         c_3 = repo3.get_root()['b']['c']
@@ -115,7 +115,7 @@ class BackendTestCase(SpaghettiTestCase):
         x_3 = c_3['x']
         self.assertEqual(set(x_3.keys()), set(['y']))
         y_3 = x_3['y']
-        self.assertEqual(y_3.data, 'ydata')
+        self.assertEqual(y_3._read_all_data(), 'ydata')
 
         x.unlink()
 
@@ -141,7 +141,7 @@ class BackendTestCase(SpaghettiTestCase):
         g2 = repo2.get_root()['b']['g']
         for c in xrange(30):
             f2 = g2['f_%d' % c]
-            self.assertEqual(f2.data, 'file contents %d' % c)
+            self.assertEqual(f2._read_all_data(), 'file contents %d' % c)
 
     def test_dangerous_filenames(self):
         g = self.repo.get_root()['b'].create_directory('g')
@@ -164,7 +164,7 @@ class BackendTestCase(SpaghettiTestCase):
         self.assertEqual(set(ok_names), set(g.keys()))
         self.assertEqual(set(ok_names), set(h.keys()))
         for name in ok_names:
-            self.assertEqual(g[name].data, repr(name*2))
+            self.assertEqual(g[name]._read_all_data(), repr(name*2))
             g[name].unlink()
             self.assertEqual(set(h[name].keys()), set(['afile', 'adir']))
             h[name]['afile'].unlink()
@@ -180,8 +180,8 @@ class LargeFileTestCase(SpaghettiTestCase):
     def assert_file_contents(self, reference):
         repo2 = GitStorage(self.repo_path)
         f = repo2.get_root()['b']['f']
-        self.assertEqual(f.data, reference,
-                         '`f.data` and `reference` do not match')
+        self.assertEqual(f._read_all_data(), reference,
+                         '`f._read_all_data()` and `reference` do not match')
 
     def test_store(self):
         f = self.repo.get_root()['b'].create_file('f')
