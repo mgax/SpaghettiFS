@@ -33,5 +33,5 @@ Missing features
 
 Performance issues
 ------------------
- - every single filesystem operation creates a commit (TODO: write buffering)
  - inodes, inode blocks and folder contents are stored as flat lists
+ - inode blocks are 64KB in size, which generates a lot of git objects
