@@ -104,8 +104,8 @@ class SpaghettiFS(Operations):
     statfs = None
 
     def __call__(self, op, path, *args):
-        args_repr = '[%s]' % ','.join(repr_log(arg) for arg in args)
-        log.debug('FUSE api call: %s %s %s', op, path, args_repr)
+        log.debug('FUSE api call: %r %r %r',
+                  op, path, tuple(LogWrap(arg) for arg in args))
         ret = '[Unknown Error]'
         try:
             ret = super(SpaghettiFS, self).__call__(op, path, *args)
@@ -114,14 +114,21 @@ class SpaghettiFS(Operations):
             ret = str(e)
             raise
         finally:
-            log.debug('FUSE api return: %s %s', op, repr_log(ret))
+            log.debug('FUSE api return: %r %r', op, LogWrap(ret))
 
-def repr_log(value):
-    if isinstance(value, basestring) and len(value) > 20:
-        r = repr(value[:12])
-        return '%s[...(len=%d)]%s' % (r[:11], len(value), r[-1])
-    else:
-        return repr(value)
+class LogWrap(object):
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        if isinstance(self.value, basestring) and len(self.value) > 20:
+            r = repr(self.value[:12])
+            return '%s[...(len=%d)]%s' % (r[:11], len(self.value), r[-1])
+        else:
+            return repr(self.value)
+
+    def __str__(self):
+        return repr(self)
 
 def mount(repo_path, mount_path, default_logging=logging.ERROR):
     if default_logging is not None:
