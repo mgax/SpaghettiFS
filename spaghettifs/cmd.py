@@ -16,7 +16,7 @@ def main():
     repo_path, mount_path = args
 
     print "mounting %r at %r" % (repo_path, mount_path)
-    mount(repo_path, mount_path, options.loglevel)
+    mount(repo_path, mount_path, loglevel=options.loglevel)
 
 if __name__ == '__main__':
     main()
