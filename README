@@ -17,17 +17,12 @@ care. That being said, here's a quick guide:
    ``site-packages`` folder
  - run unit tests: ``python setup.py test -q`` or ``python
    spaghettifs/tests/all.py``
- - copy the test repository from ``spaghettifs/tests/repo.git`` to wherever
- - mount the test repository: ``spaghettifs path/to/repo.git path/to/mount``
-
-There is currently no code to create an empty repository. Also, don't remove
-every last file in a repository, or you won't be able to create any new files.
-As I said, it's experimental. :)
+ - create a blank filesystem: ``spaghettifs mkfs path/to/repo.sfs``
+ - mount the filesystem: ``spaghettifs mount path/to/repo.sfs path/to/mount``
 
 Missing features
 ----------------
- - code to initialize a repository
- - hard links, symlinks
+ - hard links, renaming files/folders, symlinks
  - file metadata: owner, permissions, create/modify/access times
  - fsck
 
