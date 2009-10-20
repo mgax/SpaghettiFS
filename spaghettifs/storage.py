@@ -1,17 +1,33 @@
+import os
 from time import time
 import UserDict
 import logging
 import binascii
 from cStringIO import StringIO
+from itertools import chain
 
-import easygit
+from easygit import EasyGit
 
 log = logging.getLogger('spaghettifs.storage')
 log.setLevel(logging.DEBUG)
 
 class GitStorage(object):
+    commit_author = "Spaghetti User <noreply@grep.ro>"
+
+    @classmethod
+    def create(cls, repo_path):
+        if not os.path.isdir(repo_path):
+            os.mkdir(repo_path)
+        eg = EasyGit.new_repo(repo_path, bare=True)
+        inodes = eg.root.new_tree('inodes')
+        root_ls = eg.root.new_blob('root.ls')
+        root_sub = eg.root.new_tree('root.sub')
+        eg.commit(cls.commit_author, 'Created empty filesystem')
+
+        return cls(repo_path)
+
     def __init__(self, repo_path, autocommit=True):
-        self.eg = easygit.EasyGit.open_repo(repo_path)
+        self.eg = EasyGit.open_repo(repo_path)
         self.autocommit = autocommit
         log.debug('Loaded storage, autocommit=%r, HEAD=%r',
                   autocommit, self.eg.get_head_id())
@@ -31,7 +47,8 @@ class GitStorage(object):
     def create_inode(self):
         inodes = self.eg.root['inodes']
         # TODO: find a better way to choose the inode number
-        last_inode_number = max(int(name[1:]) for name in inodes)
+        inode_numbers = (int(name[1:]) for name in inodes)
+        last_inode_number = max(chain([0], inode_numbers))
         inode_name = 'i' + str(last_inode_number + 1)
         inodes.new_tree(inode_name)
         return self.get_inode(inode_name)
@@ -44,7 +61,6 @@ class GitStorage(object):
         log.info('Committing')
 
         head_id = self.eg.get_head_id()
-        author = "Spaghetti User <noreply@grep.ro>"
         if amend:
             git = self.eg.git
             prev_commit = git.commit(head_id)
@@ -56,7 +72,7 @@ class GitStorage(object):
 
         assert message is not None
 
-        self.eg.commit(author, message, parents)
+        self.eg.commit(self.commit_author, message, parents)
 
 class StorageDir(object, UserDict.DictMixin):
     is_dir = True

@@ -1,5 +1,7 @@
 from os import path
 import unittest
+import tempfile
+import shutil
 import random
 
 import dulwich
@@ -325,6 +327,50 @@ class GitStructureTestCase(SpaghettiTestCase):
         c['x'].create_file('f')
         repo = dulwich.repo.Repo(self.repo_path)
         assert_head_ancestor(repo, HEAD_1)
+
+class RepoInitTestCase(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_path = path.join(self.tmpdir, 'test.sfs')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_create_repo(self):
+        repo = GitStorage.create(self.repo_path)
+
+        git = dulwich.repo.Repo(self.repo_path)
+        commit_tree = git.tree(git.commit(git.head()).tree)
+        self.assertEqual(len(commit_tree.entries()), 3)
+
+        inodes_tree = git.tree(commit_tree['inodes'][1])
+        self.assertEqual(len(inodes_tree), 0)
+
+        root_ls_blob = git.get_blob(commit_tree['root.ls'][1])
+        self.assertEqual(root_ls_blob.data, '')
+
+        root_sub_tree = git.tree(commit_tree['root.sub'][1])
+        self.assertEqual(len(root_sub_tree.entries()), 0)
+
+    def test_create_first_objects(self):
+        repo = GitStorage.create(self.repo_path)
+        root = repo.get_root()
+
+        root.create_directory('some_folder')
+        repo.commit('created "some folder"')
+        repo2 = GitStorage(self.repo_path)
+        self.assertEqual(set(repo2.get_root().keys()),
+                         set(['some_folder']))
+        self.assertEqual(set(repo2.get_root()['some_folder'].keys()), set())
+
+        f = root.create_file('some_file')
+        self.assertEqual(f.inode.name, 'i1')
+        f.write_data('xy', 0)
+        repo.commit('created "some file"')
+        repo2 = GitStorage(self.repo_path)
+        self.assertEqual(set(repo2.get_root().keys()),
+                         set(['some_folder', 'some_file']))
+        self.assertEqual(repo2.get_root()['some_file']._read_all_data(), 'xy')
 
 if __name__ == '__main__':
     setup_logger('ERROR')
