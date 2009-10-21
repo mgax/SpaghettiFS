@@ -87,15 +87,7 @@ class StorageDir(object, UserDict.DictMixin):
         log.debug('Loaded folder %r', name)
 
     def _iter_contents(self):
-        for line in self.ls_blob.data.split('\n'):
-            if not line:
-                continue
-            try:
-                name, value = line.rsplit(' ', 1)
-            except ValueError, e:
-                log.error('Bad line in ls file %r: %r', self.path, line)
-                raise
-            yield unquote(name), value
+        return iter_entries(self.ls_blob.data)
 
     def keys(self):
         for name, value in self._iter_contents():
@@ -356,3 +348,36 @@ unquote = binascii.a2b_qp
 def check_filename(name):
     if name in ('.', '..', '') or '/' in name or len(name) > 255:
         raise ValueError("Bad filename %r" % name)
+
+def iter_entries(ls_data):
+    for line in ls_data.split('\n'):
+        if not line:
+            continue
+        name, value = line.rsplit(' ', 1)
+        yield unquote(name), value
+
+def fsck(repo_path, out):
+    count = {'errors': 0}
+    def error(msg):
+        count['errors'] += 1
+        print>>out, msg
+
+    def walk_folder(parent, folder_name):
+        for name, value in iter_entries(parent[folder_name+'.ls'].data):
+            if value == '/':
+                walk_folder(parent[folder_name+'.sub'], name)
+            else:
+                check_inode(value)
+
+    def check_inode(inode_name):
+        if inode_name not in inodes:
+            error('missing inode %r' % inode_name)
+
+    eg = EasyGit.open_repo(repo_path)
+    inodes = eg.root['inodes']
+    walk_folder(eg.root, 'root')
+
+    if count['errors']:
+        print>>out, 'done; %d errors' % count['errors']
+    else:
+        print>>out, 'done; all ok'
