@@ -4,7 +4,7 @@ setup(
     name = "SpaghettiFS",
     version = "0.1",
     packages = find_packages(),
-    install_requires = ['dulwich>=0.3.3'],
+    install_requires = ['dulwich>=0.3.3', 'fusepy>=1.0.r33'],
     author = "Alex Morega",
     author_email = "spaghettifs@grep.ro",
     description = "Git-backed FUSE filesystem",
