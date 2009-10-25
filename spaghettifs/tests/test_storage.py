@@ -176,6 +176,21 @@ class BackendTestCase(SpaghettiTestCase):
 
         self.assertEqual(list(h.keys()), [])
 
+    def test_read_past_eof(self):
+        a_txt = self.repo.get_root()['a.txt']
+
+        try:
+            data = a_txt.read_data(0, 1024)
+        except Exception, e:
+            self.fail('read past EOF raised %r' % e)
+        self.assertEqual(data, 'text file "a"\n')
+
+        try:
+            data = a_txt.read_data(500, 100)
+        except Exception, e:
+            self.fail('read past EOF raised %r' % e)
+        self.assertEqual(data, '')
+
 class LargeFileTestCase(SpaghettiTestCase):
     large_data = randomdata(1024 * 1024) # 1 MB
 

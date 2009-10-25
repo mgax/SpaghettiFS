@@ -219,6 +219,12 @@ class StorageInode(object):
 
     def read_data(self, offset, length):
         end = offset + length
+        eof = self.get_size()
+        if end > eof:
+            end = eof
+            length = end - offset
+            if length <= 0:
+                return ''
         first_block = offset / self.blocksize
         last_block = end / self.blocksize
 
