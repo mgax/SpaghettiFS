@@ -50,24 +50,29 @@ class FuseMountTestCase(SpaghettiTestCase):
 
         f = open(new_file_path, 'wb')
         self.assertTrue('newfile' in os.listdir(self.mount_point))
+        self.assertEqual(os.stat(new_file_path).st_size, 0)
         self.assertEqual(open(new_file_path).read(), '')
 
         f.write('something here!')
         f.flush()
+        self.assertEqual(os.stat(new_file_path).st_size, 15)
         self.assertEqual(open(new_file_path).read(), 'something here!')
 
         f.seek(10)
         f.write('there!')
         f.flush()
+        self.assertEqual(os.stat(new_file_path).st_size, 16)
         self.assertEqual(open(new_file_path).read(), 'something there!')
 
         f.truncate(9)
         f.flush()
+        self.assertEqual(os.stat(new_file_path).st_size, 9)
         self.assertEqual(open(new_file_path).read(), 'something')
 
         f.seek(15)
         f.write('else')
         f.flush()
+        self.assertEqual(os.stat(new_file_path).st_size, 19)
         self.assertEqual(open(new_file_path).read(), 'something\0\0\0\0\0\0else')
 
     def test_large_data(self):
