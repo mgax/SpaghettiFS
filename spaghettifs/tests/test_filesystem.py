@@ -8,6 +8,13 @@ import time
 from support import SpaghettiTestCase, randomdata
 from spaghettifs.filesystem import LogWrap
 
+if sys.platform == 'darwin':
+    umount_cmd = ['umount']
+elif sys.platform == 'linux2':
+    umount_cmd = ['fusermount', '-u', '-z']
+else:
+    raise ValueError("Don't know how to unmount a fuse filesystem")
+
 class FuseMountTestCase(SpaghettiTestCase):
     script_tmpl = "from spaghettifs.filesystem import mount; mount(%s, %s)"
 
@@ -29,7 +36,7 @@ class FuseMountTestCase(SpaghettiTestCase):
             raise AssertionError('Filesystem did not mount after 2 seconds')
 
     def tearDown(self):
-        msg = subprocess.Popen(['umount', path.realpath(self.mount_point)],
+        msg = subprocess.Popen(umount_cmd + [path.realpath(self.mount_point)],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT
                               ).communicate()[0]
