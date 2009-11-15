@@ -316,6 +316,24 @@ class LargeFileTestCase(SpaghettiTestCase):
         self.assert_file_contents('_' * (3*kb64-1) + 'xy' + '_' * (7*kb64-1))
         f.unlink()
 
+class InodeMetaTestCase(SpaghettiTestCase):
+    def test_read(self):
+        a = self.repo.get_root()['a.txt']
+        self.assertEqual(a.inode['mode'], 0100644)
+        self.assertEqual(a.inode['nlink'], 1)
+        self.assertEqual(a.inode['uid'], 0)
+        self.assertEqual(a.inode['gid'], 0)
+
+    def test_write(self):
+        a = self.repo.get_root()['a.txt']
+        a.inode['mode'] = 0100755
+        a.inode['uid'] = 1000
+
+        repo2 = GitStorage(self.repo_path)
+        a_2 = repo2.get_root()['a.txt']
+        self.assertEqual(a_2.inode['mode'], 0100755)
+        self.assertEqual(a_2.inode['uid'], 1000)
+
 class GitStructureTestCase(SpaghettiTestCase):
     def test_commit_chain(self):
         def assert_head_ancestor(repo, ancestor_id):

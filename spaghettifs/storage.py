@@ -169,11 +169,57 @@ class StorageInode(object):
     blocksize = 64*1024 # 64 KB
     #blocksize = 1024*1024 # 1024 KB
 
+    default_meta = ('mode: 0100644\n'
+                    'nlink: 1\n'
+                    'uid: 0\n'
+                    'gid: 0\n')
+    int_meta = ('nlink', 'uid', 'gid')
+    oct_meta = ('mode',)
+
     def __init__(self, name, tree, storage):
         self.name = name
         self.tree = tree
         self.storage = storage
         log.debug('Loaded inode %r', name)
+
+    def _read_meta(self):
+        try:
+            meta_blob = self.tree['meta']
+        except KeyError:
+            meta_raw = self.default_meta
+        else:
+            meta_raw = meta_blob.data
+
+        return dict(line.split(': ', 1)
+                    for line in meta_raw.strip().split('\n'))
+
+    def _write_meta(self, meta_data):
+        meta_raw = ''.join('%s: %s\n' % (key, value)
+                           for key, value in sorted(meta_data.items()))
+        self.tree.new_blob('meta').data = meta_raw
+        self.storage._autocommit()
+
+    def __getitem__(self, key):
+        value = self._read_meta()[key]
+
+        if key in self.oct_meta:
+            value = int(value, base=8)
+        elif key in self.int_meta:
+            value = int(value)
+
+        return value
+
+    def __setitem__(self, key, value):
+        if key in self.oct_meta:
+            value = '0%o' % value
+        elif key in self.int_meta:
+            value = '%d' % value
+        else:
+            raise NotImplementedError
+
+        meta_data = self._read_meta()
+        meta_data[key] = value
+        self._write_meta(meta_data)
 
     def read_block(self, n):
         block_name = 'b%d' % (n * self.blocksize)
