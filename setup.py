@@ -5,7 +5,7 @@ setup(
     version="0.1",
     description="Git-backed FUSE filesystem",
     keywords="git filesystem",
-    url="http://github.com/alex-morega/spaghettifs",
+    url="http://github.com/alex-morega/SpaghettiFS",
     license="BSD License",
     author="Alex Morega",
     author_email="public@grep.ro",
