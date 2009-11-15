@@ -15,11 +15,12 @@ elif sys.platform == 'linux2':
 else:
     raise ValueError("Don't know how to unmount a fuse filesystem")
 
-class FuseMountTestCase(SpaghettiTestCase):
+class SpaghettiMountTestCase(SpaghettiTestCase):
     script_tmpl = "from spaghettifs.filesystem import mount; mount(%s, %s)"
 
-    def setUp(self):
-        super(FuseMountTestCase, self).setUp()
+    mounted = False
+
+    def mount(self):
         self.mount_point = path.join(self.tmpdir, 'mnt')
         os.mkdir(self.mount_point)
         script = self.script_tmpl % (repr(self.repo_path),
@@ -35,13 +36,25 @@ class FuseMountTestCase(SpaghettiTestCase):
         else:
             raise AssertionError('Filesystem did not mount after 2 seconds')
 
-    def tearDown(self):
+        self.mounted = True
+
+    def umount(self):
         msg = subprocess.Popen(umount_cmd + [path.realpath(self.mount_point)],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT
                               ).communicate()[0]
         self._output = self.fsmount.communicate()[0]
-        super(FuseMountTestCase, self).tearDown()
+
+        self.mounted = False
+
+class BasicFilesystemOps(SpaghettiMountTestCase):
+    def setUp(self):
+        super(BasicFilesystemOps, self).setUp()
+        self.mount()
+
+    def tearDown(self):
+        self.umount()
+        super(BasicFilesystemOps, self).tearDown()
 
     def test_listing(self):
         ls = os.listdir(self.mount_point)
