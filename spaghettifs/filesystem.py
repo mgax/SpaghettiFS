@@ -45,6 +45,10 @@ class SpaghettiFS(Operations):
             st = dict(st_mode=(S_IFDIR | 0755), st_nlink=2)
         else:
             st = dict(st_mode=(S_IFREG | 0444), st_size=obj.size)
+            st['st_nlink'] = obj.inode['nlink']
+
+            # FUSE seeems to ignore our st_ino
+            #st['st_ino'] = int(obj.inode.name[1:])
 
         st['st_ctime'] = st['st_mtime'] = st['st_atime'] = time()
         return st
@@ -54,6 +58,11 @@ class SpaghettiFS(Operations):
         parent = self.get_obj(parent_path)
         parent.create_file(file_name)
         return 0
+
+    def link(self, target, source):
+        source_obj = self.get_obj(source)
+        target_parent_obj = self.get_obj(os.path.dirname(target))
+        target_parent_obj.link_file(os.path.basename(target), source_obj)
 
     def mkdir(self, path, mode):
         parent_path, dir_name = os.path.split(path)

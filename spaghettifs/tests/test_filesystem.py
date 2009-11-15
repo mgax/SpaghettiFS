@@ -118,6 +118,32 @@ class FuseMountTestCase(SpaghettiTestCase):
         os.rmdir(new_dir_path)
         self.assertFalse('newdir' in os.listdir(self.mount_point))
 
+    def test_link(self):
+        orig_path = path.join(self.mount_point, 'orig')
+        linked_path = path.join(self.mount_point, 'linked')
+
+        f = open(orig_path, 'wb')
+        f.write('hey')
+        f.close()
+        self.assertEqual(os.stat(orig_path).st_nlink, 1)
+
+        os.link(orig_path, linked_path)
+        self.assertEqual(os.stat(orig_path).st_nlink, 2)
+        # FUSE seems to mangle st_ino
+        #self.assertEqual(os.stat(orig_path).st_ino,
+        #                 os.stat(linked_path).st_ino)
+
+        f = open(orig_path, 'wb')
+        f.write('asdf')
+        f.close()
+        f = open(linked_path, 'rb')
+        linked_data = f.read()
+        f.close()
+        self.assertEqual(linked_data, 'asdf')
+
+        os.unlink(orig_path)
+        self.assertEqual(os.stat(linked_path).st_nlink, 1)
+
 class FilesystemLoggingTestCase(unittest.TestCase):
     def test_custom_repr(self):
         self.assertEqual(repr(LogWrap('asdf')), repr('asdf'))

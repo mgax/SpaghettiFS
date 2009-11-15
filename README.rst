@@ -21,7 +21,7 @@ care. That being said, here's a quick guide:
 
 Missing features
 ----------------
- - hard links, renaming files/folders, symlinks
+ - renaming files/folders, symlinks
  - file metadata: owner, permissions, create/modify/access times
  - fsck
 
