@@ -4,6 +4,7 @@ from os import path
 import sys
 import subprocess
 import time
+from errno import EPERM
 
 from support import SpaghettiTestCase, randomdata
 from spaghettifs.filesystem import LogWrap
@@ -158,6 +159,49 @@ class BasicFilesystemOps(SpaghettiMountTestCase):
 
         os.unlink(orig_path)
         self.assertEqual(os.stat(linked_path).st_nlink, 1)
+
+    def test_rename_file(self):
+        orig_path = path.join(self.mount_point, 'orig')
+        new_path = path.join(self.mount_point, 'linked')
+
+        f = open(orig_path, 'wb')
+        f.write('hey')
+        f.close()
+        self.assertEqual(os.stat(orig_path).st_nlink, 1)
+
+        self.assertTrue(path.isfile(orig_path))
+        self.assertFalse(path.isfile(new_path))
+
+        os.rename(orig_path, new_path)
+
+        self.assertFalse(path.isfile(orig_path))
+        self.assertTrue(path.isfile(new_path))
+        self.assertEqual(os.stat(new_path).st_nlink, 1)
+
+        f = open(new_path, 'rb')
+        data = f.read()
+        f.close()
+        self.assertEqual(data, 'hey')
+
+    def test_not_permitted(self):
+        myf_path = path.join(self.mount_point, 'myf')
+        myf2_path = path.join(self.mount_point, 'myf2')
+
+        os.mkdir(myf_path)
+
+        try:
+            os.rename(myf_path, myf2_path)
+        except OSError, e:
+            self.assertEqual(e.errno, EPERM)
+        else:
+            self.fail('OSError not raised')
+
+        try:
+            os.link(myf_path, myf2_path)
+        except OSError, e:
+            self.assertEqual(e.errno, EPERM)
+        else:
+            self.fail('OSError not raised')
 
 class FilesystemLoggingTestCase(unittest.TestCase):
     def test_custom_repr(self):

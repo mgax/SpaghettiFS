@@ -153,6 +153,7 @@ class StorageDir(object, UserDict.DictMixin):
 
     def link_file(self, name, src_file):
         """ Make a new file, hard-linked to `src_file` """
+        assert not src_file.is_dir
         return self.create_file(name, src_file.inode)
 
     def create_directory(self, name):

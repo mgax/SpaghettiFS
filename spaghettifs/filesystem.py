@@ -1,5 +1,5 @@
 import os
-from errno import ENOENT
+from errno import ENOENT, EPERM
 from stat import S_IFDIR, S_IFREG
 from time import time
 import logging
@@ -78,6 +78,14 @@ class SpaghettiFS(Operations):
     def readdir(self, path, fh):
         obj = self.get_obj(path)
         return ['.', '..'] + list(obj.keys())
+
+    def rename(self, source, target):
+        source_obj = self.get_obj(source)
+        if source_obj.is_dir:
+            raise OSError(EPERM, '')
+        target_parent_obj = self.get_obj(os.path.dirname(target))
+        target_parent_obj.link_file(os.path.basename(target), source_obj)
+        source_obj.unlink()
 
     def rmdir(self, path):
         obj = self.get_obj(path)

@@ -21,8 +21,8 @@ care. That being said, here's a quick guide:
 
 Missing features
 ----------------
- - renaming files/folders, symlinks
  - file metadata: owner, permissions, create/modify/access times
+ - symlinks, renaming of folders
  - fsck
 
 Performance issues
