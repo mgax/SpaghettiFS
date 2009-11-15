@@ -266,6 +266,35 @@ class ContextTestCase(unittest.TestCase):
         b = r.new_blob('b')
         b.data = 'asdf'
 
+class BranchTestCase(unittest.TestCase):
+    def setUp(self):
+        self.repo_path = tempfile.mkdtemp()
+        self.eg = EasyGit.new_repo(self.repo_path, bare=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo_path)
+
+    def get_head(self, name):
+        ref_path = os.path.join(self.repo_path, 'refs/heads', name)
+        with open(ref_path, 'rb') as f:
+            return f.read().strip()
+
+    def test_various_commits(self):
+        with self.eg.root as r:
+            r.new_blob('bl').data = 'asdf'
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="commit on master")
+        head1 = self.eg.get_head_id()
+        self.assertEqual(head1, self.get_head('master'))
+
+        with self.eg.root as r:
+            r['bl'].data = 'qwer'
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="commit on secondary",
+                       branch="secondary")
+        head2 = self.eg.get_head_id('secondary')
+        self.assertEqual(head1, self.get_head('master'))
+        self.assertEqual(head2, self.get_head('secondary'))
 
 if __name__ == '__main__':
     setup_logger('ERROR')

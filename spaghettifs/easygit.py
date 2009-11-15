@@ -191,7 +191,7 @@ class EasyGit(object):
 
         self.root = EasyTree(self.git, root_id, None, '[ROOT]')
 
-    def commit(self, author, message, parents=[]):
+    def commit(self, author, message, parents=[], branch='master'):
         log.debug('easygit repo: starting commit')
         for parent_id in parents:
             assert self.git.commit(parent_id)
@@ -213,11 +213,11 @@ class EasyGit(object):
         git_commit.parents = parents
 
         self.git.object_store.add_object(git_commit)
-        self.git.refs['refs/heads/master'] = git_commit.id
+        self.git.refs['refs/heads/%s' % branch] = git_commit.id
         log.debug('easygit repo: finished commit, id=%r', git_commit.id)
 
-    def get_head_id(self):
-        return self.git.head()
+    def get_head_id(self, name="master"):
+        return self.git.refs['refs/heads/%s' % name]
 
     @classmethod
     def new_repo(cls, repo_path, bare=False):
