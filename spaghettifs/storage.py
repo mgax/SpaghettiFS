@@ -5,6 +5,7 @@ import logging
 import binascii
 from cStringIO import StringIO
 from itertools import chain
+import weakref
 
 from easygit import EasyGit
 
@@ -31,6 +32,7 @@ class GitStorage(object):
         self.autocommit = autocommit
         log.debug('Loaded storage, autocommit=%r, HEAD=%r',
                   autocommit, self.eg.get_head_id())
+        self._inode_cache = {}
 
     def get_root(self):
         commit_tree = self.eg.root
@@ -41,8 +43,18 @@ class GitStorage(object):
         return root
 
     def get_inode(self, name):
+        if name in self._inode_cache:
+            inode = self._inode_cache[name]()
+            if inode is None:
+                del self._inode_cache[name]
+            else:
+                return inode
+
         inode_tree = self.eg.root['inodes'][name]
-        return StorageInode(name, inode_tree, self)
+        inode = StorageInode(name, inode_tree, self)
+        self._inode_cache[name] = weakref.ref(inode)
+
+        return inode
 
     def create_inode(self):
         inodes = self.eg.root['inodes']
@@ -52,6 +64,10 @@ class GitStorage(object):
         inode_name = 'i' + str(last_inode_number + 1)
         inodes.new_tree(inode_name)
         return self.get_inode(inode_name)
+
+    def _remove_inode(self, name):
+        if name in self._inode_cache:
+            del self._inode_cache[name]
 
     def _autocommit(self):
         if self.autocommit:
@@ -113,17 +129,28 @@ class StorageDir(object, UserDict.DictMixin):
         else:
             raise KeyError('Folder entry %s not found' % repr(key))
 
-    def create_file(self, name):
+    def create_file(self, name, inode=None):
         check_filename(name)
-        log.info('Creating file %s in %s', repr(name), repr(self.path))
 
-        inode = self.storage.create_inode()
+        if inode is None:
+            log.info('Creating file %r in %r', name, self.path)
+            inode = self.storage.create_inode()
+        else:
+            assert(inode.storage is self.storage)
+            log.info('Linking file %r in %r to inode %r',
+                     name, self.path, inode.name)
+            inode['nlink'] += 1
+
         with self.ls_blob as b:
             b.data += "%s %s\n" % (quote(name), inode.name)
 
         self.storage._autocommit()
 
         return self[name]
+
+    def link_file(self, name, src_file):
+        """ Make a new file, hard-linked to `src_file` """
+        return self.create_file(name, src_file.inode)
 
     def create_directory(self, name):
         check_filename(name)
@@ -252,6 +279,8 @@ class StorageInode(object):
     def get_size(self):
         last_block_offset = None
         for block_name in self.tree:
+            if block_name == 'meta':
+                continue
             block_offset = int(block_name[1:])
             if block_offset > last_block_offset:
                 last_block_offset = block_offset
@@ -354,8 +383,17 @@ class StorageInode(object):
                     self.delete_block(n_block)
 
     def unlink(self):
-        log.info('Unlinking inode %s', repr(self.name))
-        self.tree.remove()
+        log.info('Unlinking inode %r', self.name)
+
+        nlink = self['nlink'] - 1
+        if nlink > 0:
+            log.info('Links remaining for inode %r: %d', self.name, nlink)
+            self['nlink'] = nlink
+        else:
+            log.info('Links remaining for inode %r: 0; removing.', self.name)
+            self.storage._remove_inode(self.name)
+            self.tree.remove()
+
         self.storage._autocommit()
 
 class StorageFile(object):

@@ -191,6 +191,42 @@ class BackendTestCase(SpaghettiTestCase):
             self.fail('read past EOF raised %r' % e)
         self.assertEqual(data, '')
 
+    def test_hardlink(self):
+        root = self.repo.get_root()
+        a = root['a.txt']
+        self.assertEqual(a.inode['nlink'], 1)
+
+        linked_a = root['b'].link_file('linked_a.txt', a)
+        self.assertTrue(id(a.inode) == id(linked_a.inode),
+                        "different inodes for `a` and `linked_a`")
+        self.assertEqual(a.inode['nlink'], 2)
+
+        a.write_data('new data for text file "a"', 0)
+        self.assertEqual(linked_a._read_all_data(),
+                         'new data for text file "a"')
+
+        repo2 = GitStorage(self.repo_path)
+        a_2 = repo2.get_root()['a.txt']
+        linked_a_2 = repo2.get_root()['b']['linked_a.txt']
+        self.assertTrue(id(a_2.inode) == id(linked_a_2.inode))
+        self.assertEqual(a_2.inode['nlink'], 2)
+        self.assertEqual(linked_a_2._read_all_data(),
+                         'new data for text file "a"')
+
+        a.unlink()
+        self.assertEqual(linked_a.inode['nlink'], 1)
+
+        inode_name = linked_a.inode.name
+        self.assertTrue(inode_name in self.repo.eg.root['inodes'])
+        try:
+            self.repo.get_inode(inode_name)
+        except KeyError:
+            self.fail()
+
+        linked_a.unlink()
+        self.assertFalse(inode_name in self.repo.eg.root['inodes'])
+        self.assertRaises(KeyError, self.repo.get_inode, inode_name)
+
 class LargeFileTestCase(SpaghettiTestCase):
     large_data = randomdata(1024 * 1024) # 1 MB
 
