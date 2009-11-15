@@ -163,20 +163,33 @@ class _open_fs(object):
 
     def __enter__(self):
         self.time_mount = datetime.now()
+
         self.repo = GitStorage(self.repo_path, autocommit=False)
+        self.git = self.repo.eg.git
+
+        master_id = self.git.refs['refs/heads/master']
+        self.initial_tree_id = self.git.commit(master_id).tree
+
         msg = ("[temporary commit; currently mounted, since %s]" %
                datefmt(self.time_mount))
-        self.repo.commit(msg,
-                         branch="mounted",
-                         head_id=self.repo.eg.get_head_id('master'))
+        self.repo.commit(msg, branch="mounted", head_id=master_id)
+
         return self.cls(self.repo)
 
     def __exit__(self, e0, e1, e2):
         self.time_unmount = datetime.now()
+
         msg = ("Mounted operations:\n  mounted at %s\n  unmounted at %s\n" %
                (datefmt(self.time_mount), datefmt(self.time_unmount)))
-        self.repo.commit(msg)
-        del self.repo.eg.git.refs['refs/heads/mounted']
+        self.repo.commit(msg, amend=True, branch="mounted")
+
+        mounted_id = self.git.refs['refs/heads/mounted']
+        mounted_tree_id = self.git.commit(mounted_id).tree
+
+        if mounted_tree_id != self.initial_tree_id:
+            self.git.refs['refs/heads/master'] = mounted_id
+
+        del self.git.refs['refs/heads/mounted']
 
 def mount(repo_path, mount_path, cls=SpaghettiFS, loglevel=logging.ERROR):
     if loglevel is not None:

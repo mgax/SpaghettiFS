@@ -51,3 +51,14 @@ class MountCommits(SpaghettiMountTestCase):
         }
         self.assertRaises(KeyError, lambda: git.refs['refs/heads/mounted'])
         self.assertNotEqual(final_heads['master'], current_heads['master'])
+
+    def test_no_modifications(self):
+        self.mount()
+        git = self.git_repo()
+        initial_master = git.refs['refs/heads/master']
+
+        self.umount()
+        git = self.git_repo()
+        final_master = git.refs['refs/heads/master']
+
+        self.assertEqual(final_master, initial_master)
