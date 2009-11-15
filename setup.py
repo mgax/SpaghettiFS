@@ -1,18 +1,19 @@
 from setuptools import setup, find_packages
 
 setup(
-    name = "SpaghettiFS",
-    version = "0.1",
-    packages = find_packages(),
-    install_requires = ['dulwich>=0.3.3', 'fusepy>=1.0.r33'],
-    author = "Alex Morega",
-    author_email = "spaghettifs@grep.ro",
-    description = "Git-backed FUSE filesystem",
-    license = "BSD License",
-    keywords = "hello world example examples",
-    url = "http://github.com/alex-morega/spaghettifs",
-    test_suite = "spaghettifs.tests.all",
-    entry_points = {
+    name="SpaghettiFS",
+    version="0.1",
+    description="Git-backed FUSE filesystem",
+    keywords="git filesystem",
+    url="http://github.com/alex-morega/spaghettifs",
+    license="BSD License",
+    author="Alex Morega",
+    author_email="public@grep.ro",
+    packages=find_packages(),
+    setup_requires=['nose>=0.11'],
+    install_requires=['dulwich>=0.3.3', 'fusepy>=1.0.r33'],
+    test_suite="nose.collector",
+    entry_points={
         'console_scripts': [
             'spaghettifs = spaghettifs.cmd:main',
         ],
