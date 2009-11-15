@@ -232,6 +232,32 @@ class RetrievalTestCase(unittest.TestCase):
         t1['t2'].remove()
         self.assertRaises(KeyError, t1.__getitem__, 't2')
 
+class DelayedCommit(unittest.TestCase):
+    def setUp(self):
+        self.repo_path = tempfile.mkdtemp()
+        self.eg = EasyGit.new_repo(self.repo_path, bare=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo_path)
+
+    def test_create_remove_blob(self):
+        r = self.eg.root
+
+        r.new_blob('b')
+        del r['b']
+        r._commit()
+
+        r.new_tree('t')
+        del r['t']
+        r._commit()
+
+        r.new_tree('t')
+        r['t'].new_blob('b')
+        r['t']['b'].data = 'asdf'
+        del r['t']
+        r._commit()
+
+
 class ContextTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()

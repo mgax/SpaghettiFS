@@ -62,7 +62,8 @@ class EasyTree(object):
         for name, value in self._dirty.iteritems():
             if value is None:
                 log.debug('tree %r: removing entry %r', self.name, name)
-                del self._git_tree[name]
+                if name in self._git_tree:
+                    del self._git_tree[name]
                 continue
 
             value_git_id = value._commit()
