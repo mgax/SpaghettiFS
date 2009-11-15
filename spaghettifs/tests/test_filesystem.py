@@ -34,6 +34,8 @@ class SpaghettiMountTestCase(SpaghettiTestCase):
                 break
             time.sleep(.1)
         else:
+            if self.fsmount.poll():
+                self._output = self.fsmount.communicate()[0]
             raise AssertionError('Filesystem did not mount after 2 seconds')
 
         self.mounted = True

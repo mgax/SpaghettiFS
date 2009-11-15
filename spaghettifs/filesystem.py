@@ -31,7 +31,6 @@ class SpaghettiFS(Operations):
             try:
                 obj = obj[frag]
             except KeyError:
-                log.error('Path %s not found', repr(path))
                 return None
 
         return obj
@@ -111,7 +110,7 @@ class SpaghettiFS(Operations):
         if not self.repo.autocommit:
             self._write_count += len(data)
             if self._write_count > WRITE_BUFFER_SIZE:
-                self.repo.commit(amend=True)
+                self.repo.commit(amend=True, branch="mounted")
                 self._write_count = 0
 
         return len(data)
@@ -165,15 +164,19 @@ class _open_fs(object):
     def __enter__(self):
         self.time_mount = datetime.now()
         self.repo = GitStorage(self.repo_path, autocommit=False)
-        self.repo.commit("[temporary commit; currently mounted, since %s]" %
-                         datefmt(self.time_mount))
+        msg = ("[temporary commit; currently mounted, since %s]" %
+               datefmt(self.time_mount))
+        self.repo.commit(msg,
+                         branch="mounted",
+                         head_id=self.repo.eg.get_head_id('master'))
         return self.cls(self.repo)
 
     def __exit__(self, e0, e1, e2):
         self.time_unmount = datetime.now()
         msg = ("Mounted operations:\n  mounted at %s\n  unmounted at %s\n" %
                (datefmt(self.time_mount), datefmt(self.time_unmount)))
-        self.repo.commit(msg, amend=True)
+        self.repo.commit(msg)
+        del self.repo.eg.git.refs['refs/heads/mounted']
 
 def mount(repo_path, mount_path, cls=SpaghettiFS, loglevel=logging.ERROR):
     if loglevel is not None:

@@ -73,10 +73,12 @@ class GitStorage(object):
         if self.autocommit:
             self.commit("Auto commit")
 
-    def commit(self, message=None, amend=False):
+    def commit(self, message=None, amend=False, head_id=None, branch='master'):
         log.info('Committing')
 
-        head_id = self.eg.get_head_id()
+        if head_id is None:
+            head_id = self.eg.get_head_id(branch)
+
         if amend:
             git = self.eg.git
             prev_commit = git.commit(head_id)
@@ -88,7 +90,8 @@ class GitStorage(object):
 
         assert message is not None
 
-        self.eg.commit(self.commit_author, message, parents)
+        self.eg.commit(self.commit_author, message, parents,
+                       branch=branch)
 
 class StorageDir(object, UserDict.DictMixin):
     is_dir = True
