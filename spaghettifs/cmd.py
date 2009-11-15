@@ -2,10 +2,10 @@ import sys
 import logging
 from optparse import OptionParser
 
-from spaghettifs.storage import GitStorage
+from spaghettifs.storage import GitStorage, fsck
 from spaghettifs.filesystem import mount
 
-usage = "usage: %prog <mkfs REPO_PATH | mount REPO_PATH MOUNT_PATH [options]>"
+usage = "usage: %prog <mkfs REPO_PATH | mount REPO_PATH MOUNT_PATH [options] | fsck REPO_PATH>"
 parser = OptionParser(usage=usage)
 parser.add_option("-v", "--verbose",
                   action="store_const", const=logging.DEBUG, dest="loglevel")
@@ -30,6 +30,11 @@ def main():
         repo_path, mount_path = args[1:]
         print "mounting %r at %r" % (repo_path, mount_path)
         mount(repo_path, mount_path, loglevel=options.loglevel)
+
+    elif args[0] == 'fsck':
+        if len(args) != 2:
+            return parser.print_usage()
+        fsck(args[1], sys.stdout)
 
     else:
         return parser.print_usage()
