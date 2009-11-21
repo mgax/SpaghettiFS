@@ -32,15 +32,19 @@ class BasicTestCase(unittest.TestCase):
 
     def test_create_retrieve_blobs(self):
         for name in ['345', '7', '22', '549', '0']:
+            self.assertTrue(name not in self.tt)
             self.tt.new_blob(name).data = 'asdf'
             self.commit()
+            self.assertTrue(name in self.tt)
             self.assertEqual(self.tt[name].data, 'asdf')
             self.assertTrue(name not in self.eg.root['tt'])
 
     def test_create_retrieve_trees(self):
         for name in ['24', '9', '873', '22']:
+            self.assertTrue(name not in self.tt)
             self.tt.new_tree(name).new_blob('c').data = 'qwer'
             self.commit()
+            self.assertTrue(name in self.tt)
             self.assertEqual(self.tt[name]['c'].data, 'qwer')
             self.assertTrue(name not in self.eg.root['tt'])
 

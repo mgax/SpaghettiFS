@@ -8,6 +8,8 @@ log = logging.getLogger('spaghettifs.easygit')
 log.setLevel(logging.DEBUG)
 
 class EasyTree(object):
+    is_tree = True
+
     def __init__(self, git_repo, git_id=None, parent=None, name=None):
         self.parent = parent
         self.name = name
@@ -137,6 +139,8 @@ class EasyTree(object):
         del self.parent[self.name]
 
 class EasyBlob(object):
+    is_tree = False
+
     def __init__(self, git_repo, git_id=None, parent=None, name=None):
         self.parent = parent
         self.name = name

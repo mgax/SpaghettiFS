@@ -8,43 +8,69 @@ class TreeTree(object):
     def __init__(self, container):
         self.container = container
 
-    def locate(self, name, create=None):
+    def walk(self, name, look):
         check_name(name)
-
-        def traverse(node, name, create=None):
+        keys = ['tt%d' % len(name)] + list(name)
+        last_key = keys.pop()
+        ikeys = iter(keys)
+        def step(node):
+            assert node.is_tree
             try:
-                return node[name]
-            except KeyError:
-                if create is None:
-                    raise
-                elif create == 'tree':
-                    return node.new_tree(name)
-                elif create == 'blob':
-                    return node.new_blob(name)
-                else:
-                    raise NotImplementedError
-
-        node = traverse(self.container, 'tt%d' % len(name), create='tree')
-        for digit in name[:-1]:
-            node = traverse(node, digit, create='tree')
-        if create is not None and name[-1] in node:
-            raise ValueError('entry %r already exists' % name)
-        return traverse(node, name[-1], create=create)
+                key = next(ikeys)
+            except StopIteration:
+                return look(node, last_key, True, lambda nextnode: nextnode)
+            else:
+                return look(node, key, False, step)
+        return step(self.container)
 
     def new_tree(self, name):
-        return self.locate(name, create='tree')
+        def look(node, key, last, step):
+            try:
+                nextnode = node[key]
+            except KeyError:
+                nextnode = node.new_tree(key)
+            return step(nextnode)
+
+        value = self.walk(name, look)
+        if not value.is_tree:
+            raise ValueError
+        return value
 
     def new_blob(self, name):
-        return self.locate(name, create='blob')
+        def look(node, key, last, step):
+            try:
+                nextnode = node[key]
+            except KeyError:
+                if last:
+                    nextnode = node.new_blob(key)
+                else:
+                    nextnode = node.new_tree(key)
+            return step(nextnode)
+
+        value = self.walk(name, look)
+        if value.is_tree:
+            raise ValueError
+        return value
 
     def __getitem__(self, name):
-        return self.locate(name)
+        def look(node, key, last, step):
+            return step(node[key])
+
+        return self.walk(name, look)
+
+    def __contains__(self, name):
+        try:
+            self[name]
+        except KeyError:
+            return False
+        else:
+            return True
 
 def check_name(name):
     if not name:
-        raise ValueError
+        raise ValueError('Blank names not allowed: %r' % name)
     if not isinstance(name, basestring):
-        raise ValueError
+        raise ValueError('Names must be strings: %r' % name)
     for item in name:
         if item not in '0123456789':
-            raise ValueError
+            raise ValueError('Names must contain only digits: %r' % name)
