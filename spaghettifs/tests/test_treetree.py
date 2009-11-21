@@ -60,6 +60,30 @@ class BasicTestCase(unittest.TestCase):
         self.tt.new_tree('123')
         self.assertRaises(ValueError, self.tt.new_blob, '123')
 
+    def test_remove(self):
+        raw_tt = self.eg.root['tt']
+        for name in ['345', '7', '22', '549']:
+            self.tt.new_blob(name).data = 'asdf'
+
+        self.assertTrue('345' in self.tt)
+        self.assertTrue('tt3' in raw_tt)
+        self.assertTrue('3' in raw_tt['tt3'])
+        del self.tt['345']
+        self.assertTrue('345' not in self.tt)
+        self.assertTrue('tt3' in raw_tt)
+        self.assertTrue('3' not in raw_tt['tt3'])
+
+        self.assertTrue('7' in self.tt)
+        self.assertTrue('tt1' in raw_tt)
+        del self.tt['7']
+        self.assertTrue('7' not in self.tt)
+        self.assertTrue('tt1' not in raw_tt)
+
+        self.assertRaises(KeyError, lambda: self.tt['345'])
+        self.assertRaises(KeyError, lambda: self.tt['7'])
+        self.assertEqual(self.tt['22'].data, 'asdf')
+        self.assertEqual(self.tt['549'].data, 'asdf')
+
 if __name__ == '__main__':
     setup_logger('ERROR')
     unittest.main()

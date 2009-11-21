@@ -66,6 +66,19 @@ class TreeTree(object):
         else:
             return True
 
+    def __delitem__(self, name):
+        def look(node, key, last, step):
+            if last:
+                del node[key]
+                return
+
+            nextnode = node[key]
+            step(nextnode)
+            if not nextnode.keys():
+                del node[key]
+
+        return self.walk(name, look)
+
 def check_name(name):
     if not name:
         raise ValueError('Blank names not allowed: %r' % name)
