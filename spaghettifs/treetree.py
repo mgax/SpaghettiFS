@@ -5,12 +5,13 @@ be as close as possible to the indices of a list.
 """
 
 class TreeTree(object):
-    def __init__(self, container):
+    def __init__(self, container, prefix='tt'):
         self.container = container
+        self.prefix = prefix
 
     def walk(self, name, look):
         check_name(name)
-        keys = ['tt%d' % len(name)] + list(name)
+        keys = ['%s%d' % (self.prefix, len(name))] + list(name)
         last_key = keys.pop()
         ikeys = iter(keys)
         def step(node):

@@ -8,6 +8,7 @@ from itertools import chain
 import weakref
 
 from easygit import EasyGit
+from treetree import TreeTree
 
 log = logging.getLogger('spaghettifs.storage')
 log.setLevel(logging.DEBUG)
@@ -62,7 +63,8 @@ class GitStorage(object):
         inode_numbers = (int(name[1:]) for name in inodes)
         last_inode_number = max(chain([0], inode_numbers))
         inode_name = 'i' + str(last_inode_number + 1)
-        inodes.new_tree(inode_name)
+        inode_tree = inodes.new_tree(inode_name)
+        inode_tree.new_blob('meta').data = StorageInode.default_meta
         return self.get_inode(inode_name)
 
     def _remove_inode(self, name):
@@ -205,14 +207,16 @@ class StorageInode(object):
     default_meta = ('mode: 0100644\n'
                     'nlink: 1\n'
                     'uid: 0\n'
-                    'gid: 0\n')
-    int_meta = ('nlink', 'uid', 'gid')
+                    'gid: 0\n'
+                    'size: 0\n')
+    int_meta = ('nlink', 'uid', 'gid', 'size')
     oct_meta = ('mode',)
 
     def __init__(self, name, tree, storage):
         self.name = name
         self.tree = tree
         self.storage = storage
+        self.tt = TreeTree(tree, prefix='bt')
         log.debug('Loaded inode %r', name)
 
     def _read_meta(self):
@@ -255,52 +259,36 @@ class StorageInode(object):
         self._write_meta(meta_data)
 
     def read_block(self, n):
-        block_name = 'b%d' % (n * self.blocksize)
+        block_name = str(n)
         log.debug('Reading block %r of inode %r', block_name, self.name)
         try:
-            block = self.tree[block_name]
+            block = self.tt[block_name]
         except KeyError:
             return ''
         else:
             return block.data
 
     def write_block(self, n, data):
-        block_name = 'b%d' % (n * self.blocksize)
+        block_name = str(n)
         log.debug('Writing block %r of inode %r', block_name, self.name)
-        if block_name in self.tree:
-            block = self.tree[block_name]
-        else:
-            block = self.tree.new_blob(block_name)
+        try:
+            block = self.tt[block_name]
+        except KeyError:
+            block = self.tt.new_blob(block_name)
         block.data = data
 
         self.storage._autocommit()
 
     def delete_block(self, n):
-        block_name = 'b%d' % (n * self.blocksize)
+        block_name = str(n)
         log.debug('Removing block %r of inode %r', block_name, self.name)
-        del self.tree[block_name]
+        del self.tt[block_name]
 
         self.storage._autocommit()
 
-    def get_size(self):
-        last_block_offset = None
-        for block_name in self.tree:
-            if block_name == 'meta':
-                continue
-            block_offset = int(block_name[1:])
-            if block_offset > last_block_offset:
-                last_block_offset = block_offset
-                last_block_name = block_name
-
-        if last_block_offset is None:
-            return 0
-        else:
-            last_block = self.tree[last_block_name]
-            return last_block_offset + len(last_block.data)
-
     def read_data(self, offset, length):
         end = offset + length
-        eof = self.get_size()
+        eof = self['size']
         if end > eof:
             end = eof
             length = end - offset
@@ -331,7 +319,7 @@ class StorageInode(object):
         return output
 
     def write_data(self, data, offset):
-        current_size = self.get_size()
+        current_size = self['size']
         if current_size < offset:
             self.truncate(offset)
 
@@ -368,10 +356,13 @@ class StorageInode(object):
             datafile.write(data[data_start:data_end])
             self.write_block(n_block, datafile.getvalue())
 
+        if end > current_size:
+            self['size'] = end
+
     def truncate(self, new_size):
         log.info("Truncating inode %s, new size %d", repr(self.name), new_size)
 
-        current_size = self.get_size()
+        current_size = self['size']
         if current_size < new_size:
             # TODO: avoid creating one big string
             self.write_data('\0' * (new_size - current_size), current_size)
@@ -387,6 +378,8 @@ class StorageInode(object):
                     self.write_block(n_block, old_data[:truncate_offset])
                 else:
                     self.delete_block(n_block)
+
+        self['size'] = new_size
 
     def unlink(self):
         log.info('Unlinking inode %r', self.name)
@@ -416,10 +409,10 @@ class StorageFile(object):
 
     @property
     def size(self):
-        return self.inode.get_size()
+        return self.inode['size']
 
     def _read_all_data(self):
-        return self.read_data(0, self.inode.get_size())
+        return self.read_data(0, self.size)
 
     def read_data(self, offset, length):
         return self.inode.read_data(offset, length)

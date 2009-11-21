@@ -23,10 +23,24 @@ class SpaghettiTestCase(unittest.TestCase):
         eg = EasyGit.new_repo(self.repo_path, bare=True)
         with eg.root as root:
             with root.new_tree('inodes') as inodes:
-                inodes.new_tree('i1').new_blob('b0').data = 'text file "a"\n'
-                inodes.new_tree('i2').new_blob('b0').data = 'file D!\n'
-                inodes.new_tree('i3').new_blob('b0').data = 'the E file\n'
-                inodes.new_tree('i4').new_blob('b0').data = 'F is here\n'
+                def make_file_inode(inode_name, contents):
+                    with inodes.new_tree(inode_name) as i1:
+                        b0 = i1.new_tree('bt1').new_blob('0')
+                        b0.data = contents
+                        meta = i1.new_blob('meta')
+                        meta.data = ('mode: 0100644\n'
+                                     'nlink: 1\n'
+                                     'uid: 0\n'
+                                     'gid: 0\n'
+                                     'size: %(size)d\n') % {
+                                         'size': len(contents),
+                                     }
+
+                make_file_inode('i1', 'text file "a"\n')
+                make_file_inode('i2', 'file D!\n')
+                make_file_inode('i3', 'the E file\n')
+                make_file_inode('i4', 'F is here\n')
+
             root.new_blob('root.ls').data = 'a.txt i1\nb /\n'
             with root.new_tree('root.sub') as root_sub:
                 root_sub.new_blob('b.ls').data = 'c /\nf.txt i4\n'
