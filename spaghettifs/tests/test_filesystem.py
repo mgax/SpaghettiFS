@@ -7,14 +7,25 @@ import time
 from errno import EPERM
 
 from support import SpaghettiTestCase, randomdata
-from spaghettifs.filesystem import LogWrap
 
-if sys.platform == 'darwin':
-    umount_cmd = ['umount']
-elif sys.platform == 'linux2':
-    umount_cmd = ['fusermount', '-u', '-z']
-else:
-    raise ValueError("Don't know how to unmount a fuse filesystem")
+def wait_for_mount(mount_path):
+    for c in xrange(20):
+        if path.ismount(mount_path):
+            return True
+        time.sleep(.1)
+    else:
+        return False
+
+def do_umount(mount_path):
+    if sys.platform == 'darwin':
+        cmd = ['umount', mount_path]
+    elif sys.platform == 'linux2':
+        cmd = ['fusermount', '-u', '-z', mount_path]
+    else:
+        raise ValueError("Don't know how to unmount a fuse filesystem")
+
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return p.communicate()[0]
 
 class SpaghettiMountTestCase(SpaghettiTestCase):
     script_tmpl = "from spaghettifs.filesystem import mount; mount(%s, %s)"
@@ -30,11 +41,7 @@ class SpaghettiMountTestCase(SpaghettiTestCase):
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT)
         # wait for mount operation to complete
-        for c in xrange(20):
-            if path.ismount(self.mount_point):
-                break
-            time.sleep(.1)
-        else:
+        if not wait_for_mount(self.mount_point):
             if self.fsmount.poll():
                 self._output = self.fsmount.communicate()[0]
             raise AssertionError('Filesystem did not mount after 2 seconds')
@@ -42,10 +49,7 @@ class SpaghettiMountTestCase(SpaghettiTestCase):
         self.mounted = True
 
     def umount(self):
-        msg = subprocess.Popen(umount_cmd + [path.realpath(self.mount_point)],
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT
-                              ).communicate()[0]
+        msg = do_umount(path.realpath(self.mount_point))
         self._output = self.fsmount.communicate()[0]
 
         self.mounted = False
@@ -205,6 +209,7 @@ class BasicFilesystemOps(SpaghettiMountTestCase):
 
 class FilesystemLoggingTestCase(unittest.TestCase):
     def test_custom_repr(self):
+        from spaghettifs.filesystem import LogWrap
         self.assertEqual(repr(LogWrap('asdf')), repr('asdf'))
         self.assertEqual(repr(LogWrap('"')), repr('"'))
         self.assertEqual(repr(LogWrap('\'')), repr('\''))
