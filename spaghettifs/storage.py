@@ -115,22 +115,24 @@ class StorageDir(object, UserDict.DictMixin):
     def __getitem__(self, key):
         for name, value in self._iter_contents():
             if key == name:
-                if value == '/':
-                    qname = quote(name)
-                    child_ls = self.sub_tree[qname + '.ls']
-                    try:
-                        child_sub = self.sub_tree[qname + '.sub']
-                    except KeyError:
-                        child_sub = self.sub_tree.new_tree(qname + '.sub')
-                        self.storage._autocommit()
-                    return StorageDir(name, child_ls, child_sub,
-                                      self.path + name + '/',
-                                      self.storage, self)
-                else:
-                    inode = self.storage.get_inode(value)
-                    return StorageFile(name, inode, self)
+                break
         else:
             raise KeyError('Folder entry %s not found' % repr(key))
+
+        if value == '/':
+            qname = quote(name)
+            child_ls = self.sub_tree[qname + '.ls']
+            try:
+                child_sub = self.sub_tree[qname + '.sub']
+            except KeyError:
+                child_sub = self.sub_tree.new_tree(qname + '.sub')
+                self.storage._autocommit()
+            return StorageDir(name, child_ls, child_sub,
+                              self.path + name + '/',
+                              self.storage, self)
+        else:
+            inode = self.storage.get_inode(value)
+            return StorageFile(name, inode, self)
 
     def create_file(self, name, inode=None):
         check_filename(name)
