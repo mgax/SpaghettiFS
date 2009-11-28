@@ -5,6 +5,7 @@ from os import path
 import shutil
 import logging
 import time
+import collections
 
 from spaghettifs import storage
 from spaghettifs import filesystem
@@ -14,14 +15,33 @@ import Queue
 log = logging.getLogger('spaghettifs.bench')
 log.setLevel(logging.DEBUG)
 
+class LogWatcher(object):
+    level = logging.DEBUG
+    def __init__(self):
+        logging.getLogger('spaghettifs').addHandler(self)
+        self.stats = collections.defaultdict(int)
+
+    def handle(self, record):
+        self.stats['log_count'] += 1
+        if 'loading git tree' in record.msg:
+            self.stats['tree_loads'] += 1
+        elif 'loading git blob' in record.msg:
+            self.stats['blob_loads'] += 1
+        elif 'Loaded inode' in record.msg:
+            self.stats['inode_loads'] += 1
+
+    def report(self):
+        return self.stats
+
 def fs_mount(repo_path, mount_path, stats_queue):
+    log_watcher = LogWatcher()
     time0 = time.time()
     clock0 = time.clock()
     filesystem.mount(repo_path, mount_path)
-    stats_queue.put({
-        'time': time.time() - time0,
-        'clock': time.clock() - clock0,
-    })
+    stats = {'time': time.time() - time0,
+             'clock': time.clock() - clock0}
+    stats.update(log_watcher.report())
+    stats_queue.put(stats)
 
 class TempFS(object):
     def __enter__(self):
