@@ -45,6 +45,22 @@ class EasyTree(object):
         self._set_dirty(name, b)
         return self[name]
 
+    def clone(self, source, name):
+        if isinstance(source, EasyTree):
+            log.debug('tree %r: cloning tree %r as %r',
+                      self.name, source, name)
+            cls = EasyTree
+        elif isinstance(source, EasyBlob):
+            log.debug('tree %r: cloning blob %r as %r',
+                      self.name, source, name)
+            cls = EasyBlob
+        else:
+            raise NotImplementedError
+
+        b = cls(self.git, source._commit(), self, name)
+        self._set_dirty(name, b)
+        return self[name]
+
     def __enter__(self):
         self._ctx_count += 1
         log.debug('tree %r: entering context manager (count=%d)',

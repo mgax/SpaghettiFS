@@ -79,6 +79,38 @@ class BasicTestCase(unittest.TestCase):
         git_b = git.get_blob(git_t['b1'][1])
         self.assertEqual(git_b.data, "hello blob!")
 
+    def test_clone(self):
+        t1 = self.eg.root
+        left = t1.new_tree('left')
+
+        left_blob = left.new_blob('blob')
+        left_blob.data = 'left_blob orig data'
+        left_tree = left.new_tree('tree')
+        left_tree_blob = left_tree.new_blob('blob')
+        left_tree_blob.data = 'left_tree_blob orig data'
+
+        right = t1.new_tree('right')
+        right_blob = right.clone(left_blob, 'blob')
+        left_blob.data = 'left_blob other data'
+        right_tree = right.clone(left_tree, 'tree')
+        left_tree_blob.data = 'left_tree_blob other data'
+
+        self.assertEqual(left_blob.data, 'left_blob other data')
+        self.assertEqual(right_blob.data, 'left_blob orig data')
+        self.assertEqual(left_tree_blob.data, 'left_tree_blob other data')
+        self.assertEqual(right_tree['blob'].data, 'left_tree_blob orig data')
+
+        self.eg.commit(author="Spaghetti User <noreply@grep.ro>",
+                       message="test commit")
+
+        eg2 = EasyGit.open_repo(self.repo_path)
+        self.assertEqual(eg2.root['left']['blob'].data, 'left_blob other data')
+        self.assertEqual(eg2.root['right']['blob'].data, 'left_blob orig data')
+        self.assertEqual(eg2.root['left']['tree']['blob'].data,
+                         'left_tree_blob other data')
+        self.assertEqual(eg2.root['right']['tree']['blob'].data,
+                         'left_tree_blob orig data')
+
 class RetrievalTestCase(unittest.TestCase):
     def setUp(self):
         self.repo_path = tempfile.mkdtemp()
