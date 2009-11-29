@@ -470,3 +470,41 @@ def fsck(repo_path, out):
         print>>out, 'done; %d errors' % count['errors']
     else:
         print>>out, 'done; all ok'
+
+def convert_fs_to_treetree_inodes(repo_path):
+    """
+    Convert an existing filesystem from the "inode with flat list of blocks"
+    format to the "inode with treetree of blocks" format. Takes one argument,
+    the path to a filesystem repository.
+    """
+
+    log.info('Converting filesystem from flat inodes to treetree inodes')
+    eg = EasyGit.open_repo(repo_path)
+    inode_index = eg.root['inodes']
+
+    class DummyStorage(object):
+        def _autocommit(self): pass
+    s = DummyStorage()
+
+    for inode_name in inode_index:
+        log.info('Reorganizing inode %r', inode_name)
+        inode = StorageInode(inode_name, inode_index[inode_name], s)
+
+        block_offsets = set()
+        for old_block_name in inode.tree:
+            if old_block_name.startswith('b'):
+                if not old_block_name.startswith('bt'):
+                    block_offsets.add(int(old_block_name[1:]))
+
+        for block_offset in sorted(block_offsets):
+            old_block_name = 'b%d' % block_offset
+            new_block_name = str(block_offset / StorageInode.blocksize)
+            log.debug('Moving block %r to %r', old_block_name, new_block_name)
+            old_block = inode.tree[old_block_name]
+            new_block = inode.tt.clone(old_block, new_block_name)
+            del inode.tree[old_block_name]
+
+        inode['size'] = block_offset + len(new_block.data)
+
+    message = "Convert filesystem to treetree inodes"
+    eg.commit(GitStorage.commit_author, message, [eg.get_head_id('master')])
