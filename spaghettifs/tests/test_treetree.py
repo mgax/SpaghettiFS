@@ -60,6 +60,15 @@ class BasicTestCase(unittest.TestCase):
         self.tt.new_tree('123')
         self.assertRaises(ValueError, self.tt.new_blob, '123')
 
+    def test_clone(self):
+        blobby = self.eg.root.new_blob('blobby')
+        blobby.data = 'blobby data'
+        self.tt.clone(blobby, '1234')
+        blobby.data = 'qwer'
+        self.assertEqual(self.tt['1234'].data, 'blobby data')
+        self.assertEqual(self.eg.root['tt']['tt4']['1']['2']['3']['4'].data,
+                         'blobby data')
+
     def test_remove(self):
         raw_tt = self.eg.root['tt']
         for name in ['345', '7', '22', '549']:

@@ -53,6 +53,24 @@ class TreeTree(object):
             raise ValueError
         return value
 
+    def clone(self, source, name):
+        def look(node, key, last, step):
+            try:
+                nextnode = node[key]
+            except KeyError:
+                if last:
+                    nextnode = node.clone(source, key)
+                else:
+                    nextnode = node.new_tree(key)
+            return step(nextnode)
+
+        value = self.walk(name, look)
+        if source.is_tree and not value.is_tree:
+            raise ValueError
+        if not source.is_tree and value.is_tree:
+            raise ValueError
+        return value
+
     def __getitem__(self, name):
         def look(node, key, last, step):
             return step(node[key])
