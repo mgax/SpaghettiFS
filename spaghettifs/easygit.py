@@ -156,6 +156,7 @@ class EasyTree(object):
 
 class EasyBlob(object):
     is_tree = False
+    _git_blob = None
 
     def __init__(self, git_repo, git_id=None, parent=None, name=None):
         self.parent = parent
@@ -167,7 +168,7 @@ class EasyBlob(object):
             self.git.object_store.add_object(git_blob)
             git_id = git_blob.id
         log.debug('blob %r: loading git blob %r', self.name, git_id)
-        self._git_blob = self.git.get_blob(git_id)
+        self._git_id = git_id
         self._ctx_count = 0
 
     def __enter__(self):
@@ -179,10 +180,13 @@ class EasyBlob(object):
         self._ctx_count -= 1
 
     def _get_data(self):
+        if self._git_blob is None:
+            self._git_blob = self.git.get_blob(self._git_id)
         return self._git_blob.data
 
     def _set_data(self, value):
         log.debug('blob %r: updating value', self.name)
+        self._git_id = None
         self._git_blob = dulwich.objects.Blob.from_string(value)
         self.parent._set_dirty(self.name, self)
 
@@ -194,10 +198,14 @@ class EasyBlob(object):
     def _commit(self):
         assert self._ctx_count == 0
 
-        self.git.object_store.add_object(self._git_blob)
-        git_id = self._git_blob.id
-        log.debug('blob %r: finished commit, id=%r', self.name, git_id)
-        return git_id
+        if self._git_id is None:
+            self.git.object_store.add_object(self._git_blob)
+            self._git_id = self._git_blob.id
+            del self._git_blob
+            log.debug('blob %r: finished commit, id=%r',
+                      self.name, self._git_id)
+
+        return self._git_id
 
 class EasyGit(object):
     def __init__(self, git_repo):
