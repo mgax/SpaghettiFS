@@ -7,6 +7,7 @@ from cStringIO import StringIO
 from itertools import chain
 import weakref
 import json
+import functools
 
 from easygit import EasyGit
 from treetree import TreeTree
@@ -476,15 +477,57 @@ def iter_entries(ls_data):
         name, value = line.rsplit(' ', 1)
         yield unquote(name), value
 
-def convert_fs_to_treetree_inodes(repo_path):
+upgrade_log = logging.getLogger('spaghettifs.storage.upgrade')
+upgrade_log.setLevel(logging.DEBUG)
+
+def storage_format_upgrade(upgrade_name, upgrade_from, upgrade_to):
+    def decorator(the_upgrade):
+        @functools.wraps(the_upgrade)
+        def wrapper(repo_path):
+            eg = EasyGit.open_repo(repo_path)
+
+            if 'features' not in eg.root:
+                upgrade_log.info('Creating "features" blob for repository %r',
+                         repo_path)
+                b = eg.root.new_blob('features')
+                b.data = '{}'
+            features = FeatureBlob(eg.root['features'])
+
+            for name, value in upgrade_from.iteritems():
+                if features.get(name, None) is not value:
+                    upgrade_log.debug('Skipping upgrade %r on repository %r, '
+                              'feature %r is not %r',
+                              upgrade_name, repo_path, name, value)
+                    return
+
+            upgrade_log.info('Starting upgrade %r on repository %r',
+                     upgrade_name, repo_path)
+            the_upgrade(eg)
+
+            upgrade_log.debug('Writing features for upgrade %r', upgrade_name)
+            for name, value in upgrade_to.iteritems():
+                features[name] = value
+
+            message = "Update script %r" % upgrade_name
+            eg.commit(GitStorage.commit_author, message,
+                      [eg.get_head_id('master')])
+            upgrade_log.info('Finished upgrade %r on repository %r',
+                     upgrade_name, repo_path)
+
+        return wrapper
+
+    return decorator
+
+@storage_format_upgrade('Convert inode blocks list to treetree',
+                       upgrade_from={'inode_format': None},
+                       upgrade_to={'inode_format': 'treetree'})
+def convert_fs_to_treetree_inodes(eg):
     """
     Convert an existing filesystem from the "inode with flat list of blocks"
     format to the "inode with treetree of blocks" format. Takes one argument,
     the path to a filesystem repository.
     """
 
-    log.info('Converting filesystem from flat inodes to treetree inodes')
-    eg = EasyGit.open_repo(repo_path)
     inode_index = eg.root['inodes']
 
     class DummyStorage(object):
@@ -492,7 +535,7 @@ def convert_fs_to_treetree_inodes(repo_path):
     s = DummyStorage()
 
     for inode_name in inode_index:
-        log.info('Reorganizing inode %r', inode_name)
+        upgrade_log.debug('Reorganizing inode %r', inode_name)
         inode = StorageInode(inode_name, inode_index[inode_name], s)
 
         block_offsets = set()
@@ -504,12 +547,8 @@ def convert_fs_to_treetree_inodes(repo_path):
         for block_offset in sorted(block_offsets):
             old_block_name = 'b%d' % block_offset
             new_block_name = str(block_offset / StorageInode.blocksize)
-            log.debug('Moving block %r to %r', old_block_name, new_block_name)
             old_block = inode.tree[old_block_name]
             new_block = inode.tt.clone(old_block, new_block_name)
             del inode.tree[old_block_name]
 
         inode['size'] = block_offset + len(new_block.data)
-
-    message = "Convert filesystem to treetree inodes"
-    eg.commit(GitStorage.commit_author, message, [eg.get_head_id('master')])

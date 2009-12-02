@@ -47,7 +47,7 @@ def main():
             return parser.print_usage()
         handler = logging.StreamHandler()
         handler.setLevel(options.loglevel)
-        logging.getLogger('spaghettifs').addHandler(handler)
+        logging.getLogger('spaghettifs.storage.upgrade').addHandler(handler)
         storage.convert_fs_to_treetree_inodes(args[1])
 
     else:
