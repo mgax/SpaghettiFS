@@ -5,6 +5,8 @@ from time import time
 import logging
 from datetime import datetime
 import threading
+import functools
+import collections
 
 from fuse import FUSE, Operations
 from storage import GitStorage
@@ -14,6 +16,26 @@ log.setLevel(logging.DEBUG)
 
 WRITE_BUFFER_SIZE = 3 * 1024 * 1024 # 3MB
 
+def memoize(size):
+    memo = collections.deque(maxlen=size)
+
+    def decorator(f):
+        @functools.wraps(f)
+        def wrapper(*args):
+            for key, value in memo:
+                if key == args:
+                    break
+            else:
+                value = f(*args)
+                memo.append( (args, value) )
+
+            return value
+
+        wrapper.flush_memo = memo.clear
+        return wrapper
+
+    return decorator
+
 class SpaghettiFS(Operations):
     def __init__(self, repo):
         self.repo = repo
@@ -22,6 +44,7 @@ class SpaghettiFS(Operations):
         # big fat lock, just in case
         self._lock = threading.Lock()
 
+    @memoize(10)
     def get_obj(self, path):
         #assert(path.startswith('/'))
         obj = self.repo.get_root()
@@ -56,17 +79,20 @@ class SpaghettiFS(Operations):
         parent_path, file_name = os.path.split(path)
         parent = self.get_obj(parent_path)
         parent.create_file(file_name)
+        self.get_obj.flush_memo()
         return 0
 
     def link(self, target, source):
         source_obj = self.get_obj(source)
         target_parent_obj = self.get_obj(os.path.dirname(target))
         target_parent_obj.link_file(os.path.basename(target), source_obj)
+        self.get_obj.flush_memo()
 
     def mkdir(self, path, mode):
         parent_path, dir_name = os.path.split(path)
         parent = self.get_obj(parent_path)
         parent.create_directory(dir_name)
+        self.get_obj.flush_memo()
 
     def read(self, path, size, offset, fh):
         obj = self.get_obj(path)
@@ -86,6 +112,7 @@ class SpaghettiFS(Operations):
         target_parent_obj = self.get_obj(os.path.dirname(target))
         target_parent_obj.link_file(os.path.basename(target), source_obj)
         source_obj.unlink()
+        self.get_obj.flush_memo()
 
     def rmdir(self, path):
         obj = self.get_obj(path)
@@ -93,6 +120,7 @@ class SpaghettiFS(Operations):
             return
 
         obj.unlink()
+        self.get_obj.flush_memo()
 
     def truncate(self, path, length, fh=None):
         obj = self.get_obj(path)
@@ -107,6 +135,7 @@ class SpaghettiFS(Operations):
             return
 
         obj.unlink()
+        self.get_obj.flush_memo()
 
     def write(self, path, data, offset, fh):
         obj = self.get_obj(path)

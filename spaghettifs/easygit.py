@@ -1,6 +1,7 @@
 from time import time
 import weakref
 import logging
+import collections
 
 import dulwich
 
@@ -154,11 +155,14 @@ class EasyTree(object):
     def remove(self):
         del self.parent[self.name]
 
+blob_cache = collections.deque(maxlen=10)
+
 class EasyBlob(object):
     is_tree = False
     _git_blob = None
 
     def __init__(self, git_repo, git_id=None, parent=None, name=None):
+        blob_cache.append(self)
         self.parent = parent
         self.name = name
         self.git = git_repo
