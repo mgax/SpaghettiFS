@@ -5,6 +5,8 @@ be as close as possible to the indices of a list.
 """
 
 class TreeTree(object):
+    is_tree = True
+
     def __init__(self, container, prefix='tt'):
         self.container = container
         self.prefix = prefix
@@ -97,6 +99,9 @@ class TreeTree(object):
                 del node[key]
 
         return self.walk(name, look)
+
+    def remove(self):
+        return self.container.remove()
 
 def check_name(name):
     if not name:

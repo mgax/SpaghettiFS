@@ -52,10 +52,18 @@ class GitStorage(object):
     def create(cls, repo_path):
         if not os.path.isdir(repo_path):
             os.mkdir(repo_path)
+
         eg = EasyGit.new_repo(repo_path, bare=True)
+
         inodes = eg.root.new_tree('inodes')
         root_ls = eg.root.new_blob('root.ls')
         root_sub = eg.root.new_tree('root.sub')
+        features_blob = eg.root.new_blob('features')
+
+        features_blob.data = '{}'
+        features = FeatureBlob(features_blob)
+        features['next_inode_number'] = 1
+
         eg.commit(cls.commit_author, 'Created empty filesystem')
 
         return cls(repo_path)
@@ -66,6 +74,7 @@ class GitStorage(object):
         log.debug('Loaded storage, autocommit=%r, HEAD=%r',
                   autocommit, self.eg.get_head_id())
         self._inode_cache = {}
+        self._inodes_tt = TreeTree(self.eg.root['inodes'], prefix='it')
 
     def get_root(self):
         commit_tree = self.eg.root
@@ -83,19 +92,19 @@ class GitStorage(object):
             else:
                 return inode
 
-        inode_tree = self.eg.root['inodes'][name]
+        inode_tree = self._inodes_tt[name[1:]]
         inode = StorageInode(name, inode_tree, self)
         self._inode_cache[name] = weakref.ref(inode)
 
         return inode
 
     def create_inode(self):
-        inodes = self.eg.root['inodes']
-        # TODO: find a better way to choose the inode number
-        inode_numbers = (int(name[1:]) for name in inodes)
-        last_inode_number = max(chain([0], inode_numbers))
-        inode_name = 'i' + str(last_inode_number + 1)
-        inode_tree = inodes.new_tree(inode_name)
+        features = FeatureBlob(self.eg.root['features'])
+        next_inode_number = features['next_inode_number']
+        features['next_inode_number'] = next_inode_number + 1
+
+        inode_name = 'i%d' % next_inode_number
+        inode_tree = self._inodes_tt.new_tree(inode_name[1:])
         inode_tree.new_blob('meta').data = StorageInode.default_meta
         return self.get_inode(inode_name)
 

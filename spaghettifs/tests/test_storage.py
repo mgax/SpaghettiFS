@@ -9,6 +9,7 @@ import dulwich
 
 from support import SpaghettiTestCase, setup_logger, randomdata
 from spaghettifs.storage import GitStorage, FeatureBlob
+from spaghettifs import treetree
 
 class BackendTestCase(SpaghettiTestCase):
     def test_walk(self):
@@ -218,7 +219,8 @@ class BackendTestCase(SpaghettiTestCase):
         self.assertEqual(linked_a.inode['nlink'], 1)
 
         inode_name = linked_a.inode.name
-        self.assertTrue(inode_name in self.repo.eg.root['inodes'])
+        inodes_tt = treetree.TreeTree(self.repo.eg.root['inodes'], prefix='it')
+        self.assertTrue(inode_name[1:] in inodes_tt)
         try:
             self.repo.get_inode(inode_name)
         except KeyError:
@@ -411,7 +413,7 @@ class RepoInitTestCase(unittest.TestCase):
 
         git = dulwich.repo.Repo(self.repo_path)
         commit_tree = git.tree(git.commit(git.head()).tree)
-        self.assertEqual(len(commit_tree.entries()), 3)
+        self.assertEqual(len(commit_tree.entries()), 4)
 
         inodes_tree = git.tree(commit_tree['inodes'][1])
         self.assertEqual(len(inodes_tree), 0)
@@ -421,6 +423,10 @@ class RepoInitTestCase(unittest.TestCase):
 
         root_sub_tree = git.tree(commit_tree['root.sub'][1])
         self.assertEqual(len(root_sub_tree.entries()), 0)
+
+        features_blob = git.get_blob(commit_tree['features'][1])
+        features_dict = json.loads(features_blob.data)
+        self.assertEqual(features_dict['next_inode_number'], 1)
 
     def test_create_first_objects(self):
         repo = GitStorage.create(self.repo_path)

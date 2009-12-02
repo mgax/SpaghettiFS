@@ -7,8 +7,9 @@ import random
 import struct
 from cStringIO import StringIO
 
-from spaghettifs.storage import GitStorage
-from spaghettifs.easygit import EasyGit
+from spaghettifs import storage
+from spaghettifs import easygit
+from spaghettifs import treetree
 
 stderr_handler = logging.StreamHandler()
 stderr_handler.setLevel(logging.ERROR)
@@ -20,11 +21,12 @@ class SpaghettiTestCase(unittest.TestCase):
         self.repo_path = os.path.join(self.tmpdir, 'repo.sfs')
 
         os.mkdir(self.repo_path)
-        eg = EasyGit.new_repo(self.repo_path, bare=True)
+        eg = easygit.EasyGit.new_repo(self.repo_path, bare=True)
         with eg.root as root:
             with root.new_tree('inodes') as inodes:
+                inodes_tt = treetree.TreeTree(inodes, prefix='it')
                 def make_file_inode(inode_name, contents):
-                    with inodes.new_tree(inode_name) as i1:
+                    with inodes_tt.new_tree(inode_name[1:]) as i1:
                         b0 = i1.new_tree('bt1').new_blob('0')
                         b0.data = contents
                         meta = i1.new_blob('meta')
@@ -41,6 +43,9 @@ class SpaghettiTestCase(unittest.TestCase):
                 make_file_inode('i3', 'the E file\n')
                 make_file_inode('i4', 'F is here\n')
 
+            root.new_blob('features').data = '{}'
+            storage.FeatureBlob(root['features'])['next_inode_number'] = 5
+
             root.new_blob('root.ls').data = 'a.txt i1\nb /\n'
             with root.new_tree('root.sub') as root_sub:
                 root_sub.new_blob('b.ls').data = 'c /\nf.txt i4\n'
@@ -50,7 +55,7 @@ class SpaghettiTestCase(unittest.TestCase):
         eg.commit("Spaghetti User <noreply@grep.ro>",
                   'Created empty filesystem')
 
-        self.repo = GitStorage(self.repo_path)
+        self.repo = storage.GitStorage(self.repo_path)
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
