@@ -533,8 +533,7 @@ def storage_format_upgrade(upgrade_name, upgrade_from, upgrade_to):
 def convert_fs_to_treetree_inodes(eg):
     """
     Convert an existing filesystem from the "inode with flat list of blocks"
-    format to the "inode with treetree of blocks" format. Takes one argument,
-    the path to a filesystem repository.
+    format to the "inode with treetree of blocks" format.
     """
 
     inode_index = eg.root['inodes']
@@ -561,3 +560,31 @@ def convert_fs_to_treetree_inodes(eg):
             del inode.tree[old_block_name]
 
         inode['size'] = block_offset + len(new_block.data)
+
+@storage_format_upgrade('Convert list of inodes to treetree',
+                       upgrade_from={'inode_index_format': None},
+                       upgrade_to={'inode_index_format': 'treetree'})
+def convert_fs_to_treetree_inode_index(eg):
+    """
+    Convert a filesystem from the "inode index as as flat list" format to the
+    "inode index as treetree" format.
+    """
+
+    inode_index_raw = eg.root['inodes']
+    inode_index_tt = TreeTree(inode_index_raw, prefix='it')
+
+    all_inode_names = list(inode_index_raw.keys())
+    largest_number = -1
+    for inode_name in all_inode_names:
+        upgrade_log.debug('Moving inode %r to treetree', inode_name)
+        inode_index_tt.clone(inode_index_raw[inode_name], inode_name[1:])
+        del inode_index_raw[inode_name]
+        number = int(inode_name[1:])
+        largest_number = max(largest_number, number)
+
+    FeatureBlob(eg.root['features'])['next_inode_number'] = largest_number + 1
+
+all_updates = [
+    convert_fs_to_treetree_inodes,
+    convert_fs_to_treetree_inode_index,
+]
