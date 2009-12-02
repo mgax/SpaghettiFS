@@ -13,8 +13,6 @@ care. That being said, here's a quick guide:
    git://github.com/alex-morega/SpaghettiFS.git``
  - (optionally) set up a virtualenv
  - run ``python setup.py develop``
- - manually install fuse.py http://code.google.com/p/fusepy/ in your
-   ``site-packages`` folder
  - run unit tests: ``python setup.py test -q`` or ``python
    spaghettifs/tests/all.py``
  - create a blank filesystem: ``spaghettifs mkfs path/to/repo.sfs``
@@ -25,8 +23,3 @@ Missing features
  - file metadata: owner, permissions, create/modify/access times
  - symlinks, renaming of folders
  - fsck
-
-Performance issues
-------------------
- - folder contents and the inode table are stored as flat lists
- - inode blocks are 64KB in size, which generates a lot of git objects
