@@ -103,6 +103,3 @@ def check_name(name):
         raise ValueError('Blank names not allowed: %r' % name)
     if not isinstance(name, basestring):
         raise ValueError('Names must be strings: %r' % name)
-    for item in name:
-        if item not in '0123456789':
-            raise ValueError('Names must contain only digits: %r' % name)

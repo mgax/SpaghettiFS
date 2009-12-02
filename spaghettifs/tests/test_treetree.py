@@ -21,12 +21,11 @@ class BasicTestCase(unittest.TestCase):
                        message="test commit")
 
     def test_valid_ids(self):
-        self.assertRaises(ValueError, self.tt.new_tree, 'asdf')
-        self.assertRaises(ValueError, self.tt.new_blob, 'asdf')
         self.assertRaises(ValueError, self.tt.new_blob, '')
-        self.assertRaises(ValueError, self.tt.new_blob, '-')
+        self.assertRaises(ValueError, self.tt.new_blob, 1234)
         try:
             self.tt.new_blob('12')
+            self.tt.new_blob('asdf')
         except ValueError:
             self.fail('Should not raise exception')
 
