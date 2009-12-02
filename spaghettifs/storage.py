@@ -445,32 +445,6 @@ def iter_entries(ls_data):
         name, value = line.rsplit(' ', 1)
         yield unquote(name), value
 
-def fsck(repo_path, out):
-    count = {'errors': 0}
-    def error(msg):
-        count['errors'] += 1
-        print>>out, msg
-
-    def walk_folder(parent, folder_name):
-        for name, value in iter_entries(parent[folder_name+'.ls'].data):
-            if value == '/':
-                walk_folder(parent[folder_name+'.sub'], name)
-            else:
-                check_inode(value)
-
-    def check_inode(inode_name):
-        if inode_name not in inodes:
-            error('missing inode %r' % inode_name)
-
-    eg = EasyGit.open_repo(repo_path)
-    inodes = eg.root['inodes']
-    walk_folder(eg.root, 'root')
-
-    if count['errors']:
-        print>>out, 'done; %d errors' % count['errors']
-    else:
-        print>>out, 'done; all ok'
-
 def convert_fs_to_treetree_inodes(repo_path):
     """
     Convert an existing filesystem from the "inode with flat list of blocks"
