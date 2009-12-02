@@ -3,11 +3,12 @@ import unittest
 import tempfile
 import shutil
 import random
+import json
 
 import dulwich
 
 from support import SpaghettiTestCase, setup_logger, randomdata
-from spaghettifs.storage import GitStorage
+from spaghettifs.storage import GitStorage, FeatureBlob
 
 class BackendTestCase(SpaghettiTestCase):
     def test_walk(self):
@@ -440,6 +441,42 @@ class RepoInitTestCase(unittest.TestCase):
         self.assertEqual(set(repo2.get_root().keys()),
                          set(['some_folder', 'some_file']))
         self.assertEqual(repo2.get_root()['some_file']._read_all_data(), 'xy')
+
+class MockBlob(object):
+    def __init__(self, data):
+        self.data = data
+
+class FeaturesTestCase(unittest.TestCase):
+    def test_read(self):
+        features = FeatureBlob(MockBlob('{"a": 13}'))
+        self.assertEqual(features['a'], 13)
+        self.assertEqual(features.get('a'), 13)
+        self.assertRaises(KeyError, lambda: features['b'])
+        self.assertRaises(KeyError, lambda: features.get('b'))
+        self.assertEqual(features.get('b', 'x'), 'x')
+
+    def test_write(self):
+        mb = MockBlob('{"a": 13}')
+        features = FeatureBlob(mb)
+        features['b'] = 'asdf'
+        self.assertEqual(json.loads(mb.data), {'a': 13, 'b': 'asdf'})
+
+    def test_write_error(self):
+        features = FeatureBlob(MockBlob('{"a": 13}'))
+
+        def set_bad_key():
+            features[13] = 'asdf'
+        self.assertRaises(AssertionError, set_bad_key)
+
+        def set_bad_value():
+            features['b'] = ['asdf']
+        self.assertRaises(AssertionError, set_bad_value)
+
+        try:
+            features['b'] = 'asdf'
+            features['c'] = 15
+        except ValueError:
+            self.fail('Strings and numbers should be allowed')
 
 if __name__ == '__main__':
     setup_logger('ERROR')

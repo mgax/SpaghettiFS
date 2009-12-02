@@ -6,12 +6,43 @@ import binascii
 from cStringIO import StringIO
 from itertools import chain
 import weakref
+import json
 
 from easygit import EasyGit
 from treetree import TreeTree
 
 log = logging.getLogger('spaghettifs.storage')
 log.setLevel(logging.DEBUG)
+
+class FeatureBlob(object):
+    def __init__(self, blob):
+        self.blob = blob
+
+    def load(self):
+        return json.loads(self.blob.data)
+
+    def save(self, data):
+        self.blob.data = json.dumps(data)
+
+    nothing = object() # marker object
+    def get(self, key, default=nothing):
+        try:
+            return self.load()[key]
+        except KeyError:
+            if default is not self.nothing:
+                return default
+            else:
+                raise
+
+    def __getitem__(self, key):
+        return self.get(key)
+
+    def __setitem__(self, key, value):
+        assert isinstance(key, basestring)
+        assert isinstance(value, (basestring, int))
+        data = self.load()
+        data[key] = value
+        self.save(data)
 
 class GitStorage(object):
     commit_author = "Spaghetti User <noreply@grep.ro>"
