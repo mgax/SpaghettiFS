@@ -63,6 +63,8 @@ class GitStorage(object):
         features_blob.data = '{}'
         features = FeatureBlob(features_blob)
         features['next_inode_number'] = 1
+        features['inode_index_format'] = 'treetree'
+        features['inode_format'] = 'treetree'
 
         eg.commit(cls.commit_author, 'Created empty filesystem')
 
@@ -70,6 +72,9 @@ class GitStorage(object):
 
     def __init__(self, repo_path, autocommit=True):
         self.eg = EasyGit.open_repo(repo_path)
+        features = FeatureBlob(self.eg.root['features'])
+        assert features.get('inode_format', None) == 'treetree'
+        assert features.get('inode_index_format', None) == 'treetree'
         self.autocommit = autocommit
         log.debug('Loaded storage, autocommit=%r, HEAD=%r',
                   autocommit, self.eg.get_head_id())

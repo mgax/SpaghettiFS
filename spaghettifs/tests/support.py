@@ -44,7 +44,10 @@ class SpaghettiTestCase(unittest.TestCase):
                 make_file_inode('i4', 'F is here\n')
 
             root.new_blob('features').data = '{}'
-            storage.FeatureBlob(root['features'])['next_inode_number'] = 5
+            features = storage.FeatureBlob(root['features'])
+            features['next_inode_number'] = 5
+            features['inode_index_format'] = 'treetree'
+            features['inode_format'] = 'treetree'
 
             root.new_blob('root.ls').data = 'a.txt i1\nb /\n'
             with root.new_tree('root.sub') as root_sub:
