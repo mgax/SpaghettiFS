@@ -565,6 +565,7 @@ def convert_fs_to_treetree_inodes(eg):
             del inode.tree[old_block_name]
 
         inode['size'] = block_offset + len(new_block.data)
+        inode.tree._commit()
 
 @storage_format_upgrade('Convert list of inodes to treetree',
                        upgrade_from={'inode_index_format': None},
